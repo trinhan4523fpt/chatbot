@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Chatbot.Api/Chatbot.Api.csproj" />
+    <Project Path="src/Chatbot.Application/Chatbot.Application.csproj" />
+    <Project Path="src/Chatbot.Domain/Chatbot.Domain.csproj" />
+    <Project Path="src/Chatbot.Infrastructure/Chatbot.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Chatbot.Api.Tests/Chatbot.Api.Tests.csproj" />
+    <Project Path="tests/Chatbot.Application.Tests/Chatbot.Application.Tests.csproj" />
+    <Project Path="tests/Chatbot.Domain.Tests/Chatbot.Domain.Tests.csproj" />
+    <Project Path="tests/Chatbot.Integration.Tests/Chatbot.Integration.Tests.csproj" />
+  </Folder>
+</Solution>

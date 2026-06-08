@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+  DOTNET_NOLOGO: "1"
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: "1"
+
+jobs:
+  dotnet:
+    name: .NET build & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET (from global.json)
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/Directory.Packages.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - run: dotnet restore Chatbot.slnx
+      - run: dotnet build Chatbot.slnx -c Release --no-restore
+      # Integration tests use Testcontainers (Docker is available on ubuntu runners).
+      - run: dotnet test Chatbot.slnx -c Release --no-build --verbosity normal
+
+  migrations-check:
+    name: EF migrations check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+      - name: Install dotnet-ef
+        run: dotnet tool install --global dotnet-ef
+      - name: Verify model matches migrations
+        run: |
+          if [ -d "src/Chatbot.Infrastructure/Persistence/Migrations" ]; then
+            dotnet ef migrations has-pending-model-changes \
+              --project src/Chatbot.Infrastructure \
+              --startup-project src/Chatbot.Api
+          else
+            echo "No migrations yet (pre-M1) — skipping."
+          fi
+
+  python-ml:
+    name: Python ML lint & smoke test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ml
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install (lightweight smoke deps)
+        run: pip install fastapi httpx pydantic pytest ruff
+      - name: Ruff
+        run: ruff check .
+      - name: Pytest (skeleton smoke)
+        run: pytest -q

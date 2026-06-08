@@ -1,0 +1,37 @@
+[
+  {
+    "external_ref": "Q01",
+    "question": "Công nghệ thông tin là gì?",
+    "ground_truth": "Công nghệ thông tin là ngành sử dụng máy tính và phần mềm để lưu trữ, xử lý, truyền và bảo vệ thông tin.",
+    "reference_context": "Công nghệ thông tin là ngành sử dụng máy tính và phần mềm để lưu trữ xử lý truyền và bảo vệ thông tin.",
+    "difficulty": "easy"
+  },
+  {
+    "external_ref": "Q02",
+    "question": "Mạng máy tính dùng để làm gì?",
+    "ground_truth": "Mạng máy tính dùng để kết nối các thiết bị với nhau.",
+    "reference_context": "Mạng máy tính kết nối các thiết bị.",
+    "difficulty": "easy"
+  },
+  {
+    "external_ref": "Q03",
+    "question": "Phần mềm có vai trò gì trong công nghệ thông tin?",
+    "ground_truth": "Phần mềm được dùng cùng máy tính để lưu trữ, xử lý, truyền và bảo vệ thông tin.",
+    "reference_context": "Công nghệ thông tin là ngành sử dụng máy tính và phần mềm để lưu trữ xử lý truyền và bảo vệ thông tin.",
+    "difficulty": "medium"
+  },
+  {
+    "external_ref": "Q04",
+    "question": "Công nghệ thông tin xử lý những loại đối tượng nào?",
+    "ground_truth": "Công nghệ thông tin xử lý thông tin: lưu trữ, xử lý, truyền và bảo vệ thông tin.",
+    "reference_context": "lưu trữ xử lý truyền và bảo vệ thông tin",
+    "difficulty": "medium"
+  },
+  {
+    "external_ref": "Q05",
+    "question": "Bảo vệ thông tin có phải là một nhiệm vụ của công nghệ thông tin không?",
+    "ground_truth": "Đúng, bảo vệ thông tin là một trong các nhiệm vụ của công nghệ thông tin.",
+    "reference_context": "Công nghệ thông tin ... để lưu trữ xử lý truyền và bảo vệ thông tin.",
+    "difficulty": "hard"
+  }
+]

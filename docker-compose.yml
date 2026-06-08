@@ -1,0 +1,114 @@
+# Local development infrastructure for the Chatbot RAG platform.
+# The .NET API is run on the host (dotnet run / F5) against these services in dev.
+# Copy .env.example to .env first.  Bring up:  docker compose up -d
+name: chatbot
+
+services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: chatbot-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD:-Chatbot_Dev_P@ssw0rd1}
+      MSSQL_PID: Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - mssql-data:/var/opt/mssql
+    networks: [chatbot-net]
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q \"SELECT 1\" -b -o /dev/null",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: chatbot-qdrant
+    ports:
+      - "6333:6333" # REST
+      - "6334:6334" # gRPC
+    volumes:
+      - qdrant-data:/qdrant/storage
+    networks: [chatbot-net]
+    # Qdrant images are distroless (no shell), so no container healthcheck here;
+    # the .NET API's /health/deps probe covers Qdrant readiness.
+
+  ollama:
+    image: ollama/ollama:latest
+    container_name: chatbot-ollama
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    networks: [chatbot-net]
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
+    # Uncomment to use an NVIDIA GPU:
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+
+  ollama-init:
+    image: ollama/ollama:latest
+    container_name: chatbot-ollama-init
+    depends_on:
+      ollama:
+        condition: service_started
+    environment:
+      OLLAMA_HOST: http://ollama:11434
+    entrypoint: ["/bin/sh", "-c"]
+    # Primary Vietnamese-capable chat model + RAGAS judge. Fallback: llama3.1:8b.
+    command: >
+      "ollama pull ${OLLAMA_CHAT_MODEL:-qwen2.5:7b-instruct}"
+    networks: [chatbot-net]
+    restart: "no"
+
+  python-ml:
+    build:
+      context: ./ml
+      dockerfile: Dockerfile
+    container_name: chatbot-python-ml
+    depends_on:
+      qdrant:
+        condition: service_started
+      ollama:
+        condition: service_started
+    environment:
+      INTERNAL_API_KEY: ${INTERNAL_API_KEY:-dev-internal-key-change-me}
+      QDRANT_URL: http://qdrant:6333
+      OLLAMA_URL: http://ollama:11434
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      RAGAS_JUDGE_MODEL: ${OLLAMA_CHAT_MODEL:-qwen2.5:7b-instruct}
+      HF_HOME: /cache/hf
+      # Mặc định chấm điểm bằng LLM-judge cục bộ (ổn định). Bỏ comment để dùng thư viện RAGAS
+      # chính thức (cần pin phiên bản ragas/langchain tương thích) — xem README mục "Benchmark RBL & RAGAS".
+      # RAGAS_USE_LIBRARY: "1"
+    ports:
+      - "8000:8000" # dev only; do NOT publish in production
+    volumes:
+      - hf-cache:/cache/hf
+    networks: [chatbot-net]
+
+networks:
+  chatbot-net:
+    driver: bridge
+
+volumes:
+  mssql-data:
+  qdrant-data:
+  ollama-models:
+  hf-cache:
