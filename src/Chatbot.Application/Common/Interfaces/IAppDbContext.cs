@@ -13,6 +13,7 @@ public interface IAppDbContext
     DbSet<UserRole> UserRoles { get; }
     DbSet<RolePermission> RolePermissions { get; }
     DbSet<UserSubject> UserSubjects { get; }
+    DbSet<SubjectInstructor> SubjectInstructors { get; }
     DbSet<RefreshToken> RefreshTokens { get; }
     DbSet<PasswordResetToken> PasswordResetTokens { get; }
 

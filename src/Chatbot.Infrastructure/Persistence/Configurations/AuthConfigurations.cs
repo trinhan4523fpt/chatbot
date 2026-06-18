@@ -108,6 +108,23 @@ public sealed class UserSubjectConfiguration : IEntityTypeConfiguration<UserSubj
     }
 }
 
+public sealed class SubjectInstructorConfiguration : IEntityTypeConfiguration<SubjectInstructor>
+{
+    public void Configure(EntityTypeBuilder<SubjectInstructor> b)
+    {
+        b.ToTable("SubjectInstructor", Schemas.Auth);
+        b.HasKey(x => new { x.SubjectId, x.UserId });
+        b.Property(x => x.AssignedAtUtc).HasDefaultValueSql("SYSUTCDATETIME()");
+
+        b.HasOne(x => x.User).WithMany()
+            .HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        b.HasOne(x => x.Subject).WithMany(s => s.Instructors)
+            .HasForeignKey(x => x.SubjectId).OnDelete(DeleteBehavior.Restrict);
+
+        b.HasIndex(x => x.UserId).HasDatabaseName("IX_SubjectInstructor_UserId");
+    }
+}
+
 public sealed class RefreshTokenConfiguration : IEntityTypeConfiguration<RefreshToken>
 {
     public void Configure(EntityTypeBuilder<RefreshToken> b)

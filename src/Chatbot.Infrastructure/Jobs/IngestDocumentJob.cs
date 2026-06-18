@@ -1,4 +1,5 @@
 using Chatbot.Application.Common;
+using Chatbot.Application.Common.Exceptions;
 using Chatbot.Application.Common.Interfaces;
 using Chatbot.Domain.Entities;
 using Chatbot.Domain.Enums;
@@ -149,6 +150,18 @@ public sealed class IngestDocumentJob(
 
             logger.LogInformation("Ingested document {DocumentId}: {Chunks} chunks into {Collection}.",
                 documentId, chunkEntities.Count, collection);
+        }
+        catch (AiServiceException ex) when (ex.IsPermanent)
+        {
+            // Permanent data error (e.g. corrupt/invalid file): mark failed and do NOT rethrow,
+            // so Hangfire does not retry a job that can never succeed.
+            logger.LogWarning(ex, "Ingestion permanently failed (data error) for document {DocumentId}; not retrying.", documentId);
+            document.Status = DocumentStatus.Failed;
+            job.State = ProcessingState.Failed;
+            job.Error = ex.Message.Length > 1900 ? ex.Message[..1900] : ex.Message;
+            job.FinishedAtUtc = clock.UtcNow;
+            job.UpdatedAtUtc = clock.UtcNow;
+            await db.SaveChangesAsync(CancellationToken.None);
         }
         catch (Exception ex)
         {

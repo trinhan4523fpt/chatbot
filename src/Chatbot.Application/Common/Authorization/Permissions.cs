@@ -24,6 +24,7 @@ public static class Permissions
     {
         public const string SubjectsManage = "subjects.manage";
         public const string ChaptersManage = "chapters.manage";
+        public const string AssignInstructor = "subjects.assign_instructor";
     }
 
     public static class Documents
@@ -75,6 +76,7 @@ public static class Permissions
         new(Profile.ChangePasswordSelf, "Change own password", "Profile"),
         new(Catalog.SubjectsManage, "Manage subjects", "Catalog"),
         new(Catalog.ChaptersManage, "Manage chapters", "Catalog"),
+        new(Catalog.AssignInstructor, "Assign instructor to subject", "Catalog"),
         new(Documents.Upload, "Upload documents", "Documents"),
         new(Documents.Read, "Read documents", "Documents"),
         new(Documents.ReadChunks, "Read document chunks", "Documents"),
@@ -104,9 +106,10 @@ public static class RoleDefinitions
 {
     public const string Admin = "Admin";
     public const string Researcher = "Researcher";
+    public const string Instructor = "Instructor";
     public const string Student = "Student";
 
-    public static readonly IReadOnlyList<string> AllRoles = [Admin, Researcher, Student];
+    public static readonly IReadOnlyList<string> AllRoles = [Admin, Researcher, Instructor, Student];
 
     private static readonly string[] ProfileSelf =
         [Permissions.Profile.ReadSelf, Permissions.Profile.ChangePasswordSelf];
@@ -126,6 +129,14 @@ public static class RoleDefinitions
                 Permissions.Experiments.Create, Permissions.Experiments.Run, Permissions.Experiments.ManageCatalog,
                 Permissions.Experiments.ManageTestset, Permissions.Experiments.Finetune, Permissions.Experiments.Export,
                 Permissions.Admin.DashboardView,
+                .. ProfileSelf,
+            ],
+            [Instructor] =
+            [
+                Permissions.Catalog.ChaptersManage,
+                Permissions.Documents.Upload, Permissions.Documents.Read, Permissions.Documents.ReadChunks,
+                Permissions.Documents.Download, Permissions.Documents.Delete, Permissions.Documents.Reindex,
+                Permissions.Chat.CreateSession, Permissions.Chat.SendMessage, Permissions.Chat.ReadSession,
                 .. ProfileSelf,
             ],
             [Student] =

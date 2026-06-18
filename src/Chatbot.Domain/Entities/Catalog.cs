@@ -15,6 +15,7 @@ public class Subject : AuditableEntity, ISoftDeletable
 
     public ICollection<Chapter> Chapters { get; set; } = new List<Chapter>();
     public ICollection<Document> Documents { get; set; } = new List<Document>();
+    public ICollection<SubjectInstructor> Instructors { get; set; } = new List<SubjectInstructor>();
 }
 
 /// <summary>A chapter/section within a subject.</summary>
