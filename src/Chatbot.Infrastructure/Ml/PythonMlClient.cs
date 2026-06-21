@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Chatbot.Application.Common.Exceptions;
 using Chatbot.Application.Common.Interfaces;
 
 namespace Chatbot.Infrastructure.Ml;
@@ -77,7 +78,7 @@ public sealed class PythonMlClient(HttpClient http) : IAiServiceClient
         }
 
         var body = await response.Content.ReadAsStringAsync(ct);
-        throw new HttpRequestException($"Python ML {endpoint} failed ({(int)response.StatusCode}): {body}");
+        throw new AiServiceException((int)response.StatusCode, $"Python ML {endpoint} failed ({(int)response.StatusCode}): {body}");
     }
 
     private sealed record ChunkEnvelope(IReadOnlyList<ChunkDto> Chunks);

@@ -6,6 +6,8 @@ public sealed record UpdateSubjectRequest(string Name, string? Description);
 
 public sealed record CreateChapterRequest(string Title, int OrderIndex);
 
+public sealed record AssignInstructorRequest(long UserId);
+
 public sealed class UploadDocumentForm
 {
     public IFormFile File { get; set; } = null!;

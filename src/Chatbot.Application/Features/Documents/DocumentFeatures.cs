@@ -14,15 +14,18 @@ namespace Chatbot.Application.Features.Documents;
 public sealed record DocumentDto(
     long Id, long SubjectId, long? ChapterId, string Title, string OriginalFileName,
     FileType FileType, long SizeBytes, DocumentStatus Status, int? PageCount,
-    DateTime? IndexedAtUtc, DateTime CreatedAtUtc);
+    DateTime? IndexedAtUtc, DateTime CreatedAtUtc, int ChunkCount);
+
+public sealed record DocumentChunkDto(
+    long Id, long ChunkingStrategyId, int ChunkIndex, int? PageNumber, int? TokenCount, string Content);
 
 public sealed record DocumentDownloadInfo(string PhysicalPath, string ContentType, string OriginalFileName);
 
 internal static class DocumentMapping
 {
-    public static DocumentDto Map(Document d) => new(
+    public static DocumentDto Map(Document d, int chunkCount = 0) => new(
         d.Id, d.SubjectId, d.ChapterId, d.Title, d.OriginalFileName, d.FileType, d.SizeBytes,
-        d.Status, d.PageCount, d.IndexedAtUtc, d.CreatedAtUtc);
+        d.Status, d.PageCount, d.IndexedAtUtc, d.CreatedAtUtc, chunkCount);
 }
 
 // ---- Upload --------------------------------------------------------------------
@@ -48,6 +51,8 @@ public sealed class UploadDocumentCommandHandler(
     {
         var subject = await db.Subjects.FirstOrDefaultAsync(s => s.Id == request.SubjectId, ct)
             ?? throw new NotFoundException("Không tìm thấy môn học.");
+
+        await SubjectAccess.EnsureCanManageAsync(db, currentUser, subject.Id, ct);
 
         if (request.ChapterId is { } chapterId &&
             !await db.Chapters.AnyAsync(c => c.Id == chapterId && c.SubjectId == subject.Id, ct))
@@ -167,7 +172,9 @@ public sealed class ListDocumentsQueryHandler(IAppDbContext db)
         var items = await query
             .OrderByDescending(d => d.CreatedAtUtc).ThenBy(d => d.Id)
             .Skip((request.Page - 1) * request.PageSize).Take(request.PageSize)
-            .Select(d => DocumentMapping.Map(d))
+            .Select(d => new DocumentDto(
+                d.Id, d.SubjectId, d.ChapterId, d.Title, d.OriginalFileName, d.FileType, d.SizeBytes,
+                d.Status, d.PageCount, d.IndexedAtUtc, d.CreatedAtUtc, d.Chunks.Count))
             .ToListAsync(ct);
 
         return new PagedResult<DocumentDto>(items, request.Page, request.PageSize, total);
@@ -183,7 +190,44 @@ public sealed class GetDocumentQueryHandler(IAppDbContext db) : IRequestHandler<
     {
         var document = await db.Documents.AsNoTracking().FirstOrDefaultAsync(d => d.Id == request.Id, ct)
             ?? throw new NotFoundException("Không tìm thấy tài liệu.");
-        return DocumentMapping.Map(document);
+        var chunkCount = await db.DocumentChunks.CountAsync(c => c.DocumentId == request.Id, ct);
+        return DocumentMapping.Map(document, chunkCount);
+    }
+}
+
+// ---- View chunks ---------------------------------------------------------------
+public sealed record GetDocumentChunksQuery(long DocumentId, int Page = 1, int PageSize = 50)
+    : IRequest<PagedResult<DocumentChunkDto>>;
+
+public sealed class GetDocumentChunksQueryValidator : AbstractValidator<GetDocumentChunksQuery>
+{
+    public GetDocumentChunksQueryValidator()
+    {
+        RuleFor(x => x.Page).GreaterThanOrEqualTo(1);
+        RuleFor(x => x.PageSize).InclusiveBetween(1, 200);
+    }
+}
+
+public sealed class GetDocumentChunksQueryHandler(IAppDbContext db)
+    : IRequestHandler<GetDocumentChunksQuery, PagedResult<DocumentChunkDto>>
+{
+    public async Task<PagedResult<DocumentChunkDto>> Handle(GetDocumentChunksQuery request, CancellationToken ct)
+    {
+        if (!await db.Documents.AnyAsync(d => d.Id == request.DocumentId, ct))
+        {
+            throw new NotFoundException("Không tìm thấy tài liệu.");
+        }
+
+        var query = db.DocumentChunks.AsNoTracking().Where(c => c.DocumentId == request.DocumentId);
+        var total = await query.CountAsync(ct);
+        var items = await query
+            .OrderBy(c => c.ChunkingStrategyId).ThenBy(c => c.ChunkIndex)
+            .Skip((request.Page - 1) * request.PageSize).Take(request.PageSize)
+            .Select(c => new DocumentChunkDto(
+                c.Id, c.ChunkingStrategyId, c.ChunkIndex, c.PageNumber, c.TokenCount, c.Content))
+            .ToListAsync(ct);
+
+        return new PagedResult<DocumentChunkDto>(items, request.Page, request.PageSize, total);
     }
 }
 
@@ -227,6 +271,8 @@ public sealed class DeleteDocumentCommandHandler(
         var document = await db.Documents.FirstOrDefaultAsync(d => d.Id == request.Id, ct)
             ?? throw new NotFoundException("Không tìm thấy tài liệu.");
 
+        await SubjectAccess.EnsureCanManageAsync(db, currentUser, document.SubjectId, ct);
+
         // Capture Qdrant collections holding this document's vectors before removing the linkage.
         var collections = await db.ChunkEmbeddings
             .Where(e => e.Chunk.DocumentId == document.Id)
@@ -266,6 +312,8 @@ public sealed class ReindexDocumentCommandHandler(IAppDbContext db, IJobSchedule
     {
         var document = await db.Documents.FirstOrDefaultAsync(d => d.Id == request.Id, ct)
             ?? throw new NotFoundException("Không tìm thấy tài liệu.");
+
+        await SubjectAccess.EnsureCanManageAsync(db, currentUser, document.SubjectId, ct);
 
         var hasActiveJob = await db.DocumentProcessingJobs.AnyAsync(
             j => j.DocumentId == document.Id &&

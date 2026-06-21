@@ -7,19 +7,33 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Chatbot.Application.Features.Catalog;
 
-public sealed record SubjectDto(long Id, string Code, string Name, string? Description, int ChapterCount, int DocumentCount);
+public sealed record SubjectDto(
+    long Id, string Code, string Name, string? Description, int ChapterCount, int DocumentCount,
+    IReadOnlyList<SubjectInstructorDto> Instructors);
 
 public sealed record ChapterDto(long Id, long SubjectId, string Title, int OrderIndex);
 
 // ---- Subjects ------------------------------------------------------------------
-public sealed record ListSubjectsQuery : IRequest<IReadOnlyList<SubjectDto>>;
+/// <summary>Lists subjects. When Mine=true, only subjects the current user is assigned to teach.</summary>
+public sealed record ListSubjectsQuery(bool Mine = false) : IRequest<IReadOnlyList<SubjectDto>>;
 
-public sealed class ListSubjectsQueryHandler(IAppDbContext db) : IRequestHandler<ListSubjectsQuery, IReadOnlyList<SubjectDto>>
+public sealed class ListSubjectsQueryHandler(IAppDbContext db, ICurrentUser currentUser)
+    : IRequestHandler<ListSubjectsQuery, IReadOnlyList<SubjectDto>>
 {
-    public async Task<IReadOnlyList<SubjectDto>> Handle(ListSubjectsQuery request, CancellationToken ct) =>
-        await db.Subjects.AsNoTracking().OrderBy(s => s.Code)
-            .Select(s => new SubjectDto(s.Id, s.Code, s.Name, s.Description, s.Chapters.Count, s.Documents.Count))
+    public async Task<IReadOnlyList<SubjectDto>> Handle(ListSubjectsQuery request, CancellationToken ct)
+    {
+        var query = db.Subjects.AsNoTracking();
+        if (request.Mine && currentUser.UserId is { } userId)
+        {
+            query = query.Where(s => s.Instructors.Any(si => si.UserId == userId));
+        }
+
+        return await query.OrderBy(s => s.Code)
+            .Select(s => new SubjectDto(
+                s.Id, s.Code, s.Name, s.Description, s.Chapters.Count, s.Documents.Count,
+                s.Instructors.Select(si => new SubjectInstructorDto(si.UserId, si.User.FullName, si.User.Email)).ToList()))
             .ToListAsync(ct);
+    }
 }
 
 public sealed record CreateSubjectCommand(string Code, string Name, string? Description) : IRequest<long>;

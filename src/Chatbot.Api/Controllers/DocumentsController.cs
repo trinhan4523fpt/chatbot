@@ -66,4 +66,10 @@ public sealed class DocumentsController(ISender mediator) : ControllerBase
     [HttpGet("{id:long}/status")]
     public async Task<ActionResult<DocumentStatusDto>> Status(long id, CancellationToken ct) =>
         Ok(await mediator.Send(new GetDocumentStatusQuery(id), ct));
+
+    [HasPermission(Permissions.Documents.ReadChunks)]
+    [HttpGet("{id:long}/chunks")]
+    public async Task<ActionResult<PagedResult<DocumentChunkDto>>> Chunks(
+        long id, [FromQuery] int page = 1, [FromQuery] int pageSize = 50, CancellationToken ct = default) =>
+        Ok(await mediator.Send(new GetDocumentChunksQuery(id, page, pageSize), ct));
 }

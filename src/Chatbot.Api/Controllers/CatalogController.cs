@@ -14,8 +14,9 @@ namespace Chatbot.Api.Controllers;
 public sealed class CatalogController(ISender mediator) : ControllerBase
 {
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<SubjectDto>>> ListSubjects(CancellationToken ct) =>
-        Ok(await mediator.Send(new ListSubjectsQuery(), ct));
+    public async Task<ActionResult<IReadOnlyList<SubjectDto>>> ListSubjects(
+        [FromQuery] bool mine = false, CancellationToken ct = default) =>
+        Ok(await mediator.Send(new ListSubjectsQuery(mine), ct));
 
     [HasPermission(Permissions.Catalog.SubjectsManage)]
     [HttpPost]
@@ -44,5 +45,28 @@ public sealed class CatalogController(ISender mediator) : ControllerBase
     {
         var id = await mediator.Send(new CreateChapterCommand(subjectId, request.Title, request.OrderIndex), ct);
         return CreatedAtAction(nameof(ListChapters), new { subjectId }, new { id });
+    }
+
+    // ---- Instructor assignment (Admin) -----------------------------------------
+    [HttpGet("{subjectId:long}/instructors")]
+    public async Task<ActionResult<IReadOnlyList<SubjectInstructorDto>>> ListInstructors(
+        long subjectId, CancellationToken ct) =>
+        Ok(await mediator.Send(new ListSubjectInstructorsQuery(subjectId), ct));
+
+    [HasPermission(Permissions.Catalog.AssignInstructor)]
+    [HttpPost("{subjectId:long}/instructors")]
+    public async Task<IActionResult> AssignInstructor(
+        long subjectId, AssignInstructorRequest request, CancellationToken ct)
+    {
+        await mediator.Send(new AssignInstructorCommand(subjectId, request.UserId), ct);
+        return NoContent();
+    }
+
+    [HasPermission(Permissions.Catalog.AssignInstructor)]
+    [HttpDelete("{subjectId:long}/instructors/{userId:long}")]
+    public async Task<IActionResult> UnassignInstructor(long subjectId, long userId, CancellationToken ct)
+    {
+        await mediator.Send(new UnassignInstructorCommand(subjectId, userId), ct);
+        return NoContent();
     }
 }
