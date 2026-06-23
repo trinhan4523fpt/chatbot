@@ -1,7 +1,7 @@
 """Request/response models for the ML service."""
 from __future__ import annotations
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class ParsedPage(BaseModel):
@@ -10,7 +10,7 @@ class ParsedPage(BaseModel):
 
 
 class ParseResponse(BaseModel):
-    pages: list[ParsedPage]
+    pages: list[ParsedPage] = Field(default_factory=list)
     page_count: int
 
 
@@ -29,7 +29,7 @@ class Chunk(BaseModel):
 
 
 class ChunkResponse(BaseModel):
-    chunks: list[Chunk]
+    chunks: list[Chunk] = Field(default_factory=list)
 
 
 class EmbedRequest(BaseModel):
@@ -72,3 +72,22 @@ class RagEvalResultItem(BaseModel):
 
 class RagEvalResponse(BaseModel):
     per_item: list[RagEvalResultItem]
+
+
+class BenchmarkRequest(BaseModel):
+    pages: list[ParsedPage] = Field(default_factory=list)
+    strategies: list[str] = Field(default_factory=lambda: ["fixed", "sentence", "sliding", "semantic:multilingual-e5-base"])
+    chunk_size: int = 512
+    chunk_overlap: int = 50
+
+
+class BenchmarkResult(BaseModel):
+    strategy: str
+    chunk_count: int
+    total_tokens: int
+    mean_tokens: float
+    time_ms: float
+
+
+class BenchmarkResponse(BaseModel):
+    results: list[BenchmarkResult] = Field(default_factory=list)

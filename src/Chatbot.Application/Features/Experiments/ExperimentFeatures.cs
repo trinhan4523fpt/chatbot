@@ -214,6 +214,13 @@ public sealed class GetExperimentDashboardQueryHandler(IAppDbContext db)
                 r.EmbeddingModel!.Name, r.ChunkingStrategy!.Name, r.LlmModel!.Name,
                 r.Metric!.AvgFaithfulness, r.Metric.AvgAnswerRelevancy, r.Metric.AvgContextPrecision,
                 r.Metric.AvgContextRecall, r.Metric.AvgAnswerCorrectness, r.Metric.AvgLatencyMs,
-                r.Metric != null ? r.Metric.TotalQuestions : 0))
+                r.Metric != null ? r.Metric.TotalQuestions : 0,
+                r.Metric != null ? r.Metric.ChunkCount : null,
+                r.Metric != null ? r.Metric.AvgTokens : null,
+                r.Metric != null ? r.Metric.ChunkingTimeMs : null,
+                r.Metric != null ? r.Metric.RecallAtK : null,
+                r.Metric != null ? r.Metric.PrecisionAtK : null,
+                r.Metric != null ? r.Metric.Mrr : null,
+                r.Metric != null ? r.Metric.Ndcg : null))
             .ToListAsync(ct);
 }

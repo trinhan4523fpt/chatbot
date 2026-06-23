@@ -127,6 +127,13 @@ public sealed class ExperimentRunMetricConfiguration : IEntityTypeConfiguration<
         b.ToTable("ExperimentRunMetric", Schemas.Rbl);
         b.HasKey(x => x.Id);
         b.Property(x => x.AvgLatencyMs).HasPrecision(10, 2);
+        // New metrics precision
+        b.Property(x => x.AvgTokens).HasPrecision(10, 2);
+        b.Property(x => x.ChunkingTimeMs).HasPrecision(10, 2);
+        b.Property(x => x.RecallAtK).HasPrecision(7, 6);
+        b.Property(x => x.PrecisionAtK).HasPrecision(7, 6);
+        b.Property(x => x.Mrr).HasPrecision(7, 6);
+        b.Property(x => x.Ndcg).HasPrecision(7, 6);
 
         b.HasOne(x => x.ExperimentRun).WithOne(r => r.Metric)
             .HasForeignKey<ExperimentRunMetric>(x => x.ExperimentRunId).OnDelete(DeleteBehavior.Cascade);

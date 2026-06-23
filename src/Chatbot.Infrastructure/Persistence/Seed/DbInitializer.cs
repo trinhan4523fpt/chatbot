@@ -120,6 +120,12 @@ public sealed class DbInitializer(
             () => new ChunkingStrategy { Name = "fixed-1024-128", ChunkSize = 1024, ChunkOverlap = 128, Description = "Fixed-size 1024 tokens, 128 overlap" }, ct);
         await EnsureAsync(db.ChunkingStrategies, s => s.Name == "semantic-paragraph",
             () => new ChunkingStrategy { Name = "semantic-paragraph", Description = "Semantic paragraph splitting" }, ct);
+        await EnsureAsync(db.ChunkingStrategies, s => s.Name == "fixed-size-512-50",
+            () => new ChunkingStrategy { Name = "fixed-size-512-50", ChunkSize = 512, ChunkOverlap = 50, Description = "Fixed-size sliding window (character sliding window)" }, ct);
+        await EnsureAsync(db.ChunkingStrategies, s => s.Name == "recursive-512-50",
+            () => new ChunkingStrategy { Name = "recursive-512-50", ChunkSize = 512, ChunkOverlap = 50, Description = "Recursive character text splitter" }, ct);
+        await EnsureAsync(db.ChunkingStrategies, s => s.Name == "sentence-based",
+            () => new ChunkingStrategy { Name = "sentence-based", Description = "Sentence-based splitting" }, ct);
 
         await EnsureAsync(db.EmbeddingModels, m => m.Name == "multilingual-e5-base",
             () => new EmbeddingModel { Name = "multilingual-e5-base", Provider = "huggingface", Dimension = 768, IsFree = true, MaxInputTokens = 512, QdrantCollectionName = "emb_multilingual_e5_base", Description = "intfloat/multilingual-e5-base" }, ct);
