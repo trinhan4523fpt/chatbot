@@ -17,3 +17,5 @@ public sealed record SetActiveRequest(bool IsActive);
 public sealed record CreateChatSessionRequest(long SubjectId, string? Title);
 
 public sealed record SendMessageRequest(string Content);
+
+public sealed record ConfirmEmailRequest(string Email, string Code);

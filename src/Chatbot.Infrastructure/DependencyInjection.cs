@@ -33,11 +33,13 @@ public static class DependencyInjection
         services.AddOptions<PythonMlOptions>().Bind(configuration.GetSection(PythonMlOptions.SectionName));
         services.AddOptions<QdrantOptions>().Bind(configuration.GetSection(QdrantOptions.SectionName));
         services.AddOptions<OllamaOptions>().Bind(configuration.GetSection(OllamaOptions.SectionName));
+        services.AddOptions<EmailOptions>().Bind(configuration.GetSection(EmailOptions.SectionName));
 
         services.AddSingleton<IClock, SystemClock>();
         services.AddSingleton<IPasswordHasher, PasswordHasherAdapter>();
         services.AddSingleton<IJwtTokenService, JwtTokenService>();
         services.AddSingleton<IFileStorageService, DiskFileStorageService>();
+        services.AddScoped<IEmailService, Chatbot.Infrastructure.Email.GmailEmailService>();
         services.AddScoped<AuditableEntityInterceptor>();
 
         services.AddDbContext<ChatbotDbContext>((sp, options) =>

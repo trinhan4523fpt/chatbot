@@ -94,7 +94,7 @@ public sealed class CreateUserCommandHandler(IAppDbContext db, IPasswordHasher h
             PasswordHash = hasher.Hash(request.Password),
             IsActive = true,
             MustChangePassword = true,
-            EmailConfirmed = true,
+            EmailConfirmed = false,
             UserRoles = [.. roles.Select(r => new UserRole { RoleId = r.Id })],
         };
         db.Users.Add(user);

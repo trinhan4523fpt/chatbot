@@ -54,6 +54,11 @@ public sealed class LoginCommandHandler(
             throw new UnauthorizedException(InvalidCredentials);
         }
 
+        if (!user.EmailConfirmed)
+        {
+            throw new UnauthorizedException("Email chưa được xác nhận. Vui lòng xác nhận email trước khi đăng nhập.");
+        }
+
         var verify = hasher.Verify(user.PasswordHash, request.Password);
         if (verify == PasswordVerificationResult.Failed)
         {
