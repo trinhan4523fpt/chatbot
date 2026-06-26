@@ -6,7 +6,7 @@ public sealed record RefreshRequest(string RefreshToken);
 
 public sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 
-public sealed record CreateUserRequest(string Email, string FullName, string Password, IReadOnlyList<string>? Roles);
+public sealed record CreateUserRequest(string Email, string FullName, string? Password, IReadOnlyList<string>? Roles);
 
 public sealed record AssignRolesRequest(IReadOnlyList<string> Roles);
 

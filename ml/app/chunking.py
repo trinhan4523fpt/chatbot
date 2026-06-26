@@ -23,7 +23,11 @@ def chunk_pages(pages: list[ParsedPage], chunk_size: int, chunk_overlap: int, st
     - "sliding": simple fixed-size sliding window over characters with overlap.
     """
     strategy_lower = (strategy or "fixed").lower()
-    if "paragraph" in strategy_lower or "semantic" in strategy_lower:
+    if "semantic-paragraph" in strategy_lower:
+        strategy = "paragraph"
+    elif "semantic" in strategy_lower:
+        strategy = strategy_lower
+    elif "paragraph" in strategy_lower:
         strategy = "paragraph"
     elif "sliding" in strategy_lower or "fixed-size" in strategy_lower:
         strategy = "sliding"
@@ -223,16 +227,6 @@ def chunk_pages(pages: list[ParsedPage], chunk_size: int, chunk_overlap: int, st
             return _apply_overlap(chunks, chunk_overlap)
         return chunks
 
-    if strategy == "sentence":
-        for page in pages:
-            text = page.text.strip()
-            if not text:
-                continue
-            parts = [p.strip() for p in re.split(r"(?<=[.!?])\s+", text) if p.strip()]
-            for piece in parts:
-                _append(piece, page.page)
-        return chunks
-
     # unknown strategy: fallback to fixed
     return chunk_pages(pages, chunk_size, chunk_overlap, strategy="fixed")
 
@@ -266,7 +260,7 @@ def _apply_overlap(chunks: list[Chunk], chunk_overlap_tokens: int) -> list[Chunk
         if i == 0:
             new_chunks.append(c)
             continue
-        prev = new_chunks[i - 1]
+        prev = chunks[i - 1]
         prev_suffix = prev.content[-overlap_chars:] if len(prev.content) > overlap_chars else prev.content
         content = (prev_suffix + " " + c.content).strip()
         new_chunks.append(Chunk(index=c.index, content=content, page=c.page,

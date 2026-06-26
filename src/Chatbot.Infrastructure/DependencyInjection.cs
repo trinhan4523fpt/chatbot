@@ -48,6 +48,7 @@ public static class DependencyInjection
                 configuration.GetConnectionString("SqlServer"),
                 sql => sql.MigrationsHistoryTable("__EFMigrationsHistory", Schemas.Dbo));
             options.AddInterceptors(sp.GetRequiredService<AuditableEntityInterceptor>());
+            options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
         });
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<ChatbotDbContext>());
         services.AddScoped<DbInitializer>();
