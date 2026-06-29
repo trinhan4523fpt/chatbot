@@ -86,6 +86,18 @@ public class UserSubject
     public Subject Subject { get; set; } = null!;
 }
 
+/// <summary>Join: an instructor is assigned to a subject (scopes who may upload/manage its documents).</summary>
+public class SubjectInstructor
+{
+    public long SubjectId { get; set; }
+    public long UserId { get; set; }
+    public DateTime AssignedAtUtc { get; set; }
+    public long? AssignedBy { get; set; }
+
+    public Subject Subject { get; set; } = null!;
+    public User User { get; set; } = null!;
+}
+
 /// <summary>A refresh token (stored as SHA-256 hash). Rotation revokes the whole family on reuse.</summary>
 public class RefreshToken : CreatedEntity
 {

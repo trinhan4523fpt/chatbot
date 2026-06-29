@@ -6,13 +6,19 @@ import io
 
 def parse(filename: str, data: bytes) -> list[tuple[int, str]]:
     ext = filename.lower().rsplit(".", 1)[-1] if "." in filename else ""
-    if ext == "pdf":
-        return _parse_pdf(data)
-    if ext == "docx":
-        return _parse_docx(data)
-    if ext in ("pptx", "ppt"):
+    if ext not in ("pdf", "docx", "pptx", "ppt"):
+        raise ValueError(f"Định dạng tệp không hỗ trợ: '.{ext}'.")
+
+    try:
+        if ext == "pdf":
+            return _parse_pdf(data)
+        if ext == "docx":
+            return _parse_docx(data)
         return _parse_pptx(data)
-    raise ValueError(f"Unsupported file extension: '{ext}'")
+    except Exception as exc:  # noqa: BLE001 - corrupt/invalid file is a data error (400), not a server error
+        raise ValueError(
+            f"Không đọc được tệp .{ext}: tệp có thể bị hỏng hoặc sai định dạng ({type(exc).__name__})."
+        ) from exc
 
 
 def _parse_pdf(data: bytes) -> list[tuple[int, str]]:

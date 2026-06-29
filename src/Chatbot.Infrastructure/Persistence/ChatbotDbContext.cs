@@ -15,6 +15,7 @@ public class ChatbotDbContext(DbContextOptions<ChatbotDbContext> options)
     public DbSet<UserRole> UserRoles => Set<UserRole>();
     public DbSet<RolePermission> RolePermissions => Set<RolePermission>();
     public DbSet<UserSubject> UserSubjects => Set<UserSubject>();
+    public DbSet<SubjectInstructor> SubjectInstructors => Set<SubjectInstructor>();
     public DbSet<RefreshToken> RefreshTokens => Set<RefreshToken>();
     public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
 
