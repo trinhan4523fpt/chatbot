@@ -28,6 +28,10 @@ try
     builder.Services.AddInfrastructure(builder.Configuration);
     builder.Services.AddWebApi(builder.Configuration);
     builder.Services.AddOpenApi();
+    // Note: Swashbuckle (AddSwaggerGen) was removed due to runtime incompatibility with the
+    // current target framework/runtime. OpenAPI endpoints are provided by Microsoft.AspNetCore.OpenApi
+    // (MapOpenApi) and a compatible Swagger/Docs setup can be added later when a compatible
+    // Swashbuckle release is available.
 
     // --- Health checks: three tiers -------------------------------------------------
     var sqlConnectionString = builder.Configuration.GetConnectionString("SqlServer");
@@ -63,11 +67,27 @@ try
 
     var app = builder.Build();
 
-    // Apply migrations + seed reference data, RBAC and admin at startup.
-    using (var scope = app.Services.CreateScope())
+    // Apply migrations + seed reference data, RBAC and admin at startup when a SQL connection
+    // string is provided. Failures are caught and logged so the API can still start in
+    // local/test scenarios where a DB is not available.
+    if (!string.IsNullOrWhiteSpace(sqlConnectionString))
     {
-        var initializer = scope.ServiceProvider.GetRequiredService<DbInitializer>();
-        await initializer.InitializeAsync();
+        using (var scope = app.Services.CreateScope())
+        {
+            var initializer = scope.ServiceProvider.GetRequiredService<DbInitializer>();
+            try
+            {
+                await initializer.InitializeAsync();
+            }
+            catch (Exception ex)
+            {
+                Log.Warning(ex, "Database initialization failed — continuing without database. Set SqlServer connection string to enable DB initialization.");
+            }
+        }
+    }
+    else
+    {
+        Log.Information("SqlServer connection string not set; skipping database initialization.");
     }
 
     app.UseExceptionHandler();
@@ -87,6 +107,29 @@ try
     {
         app.MapOpenApi();
         app.MapScalarApiReference();
+        // Swagger UI (Swashbuckle) removed due to runtime incompatibility. OpenAPI docs are
+        // available via MapOpenApi().
+    }
+
+    // Compatibility redirect: many front-end/dev setups expect a /swagger path (Swashbuckle UI).
+    // Swashbuckle was removed; provide a lightweight redirect from /swagger* to /openapi* so
+    // tools or dashboards requesting /swagger won't get a 404. This is intentionally simple
+    // and only active in Development.
+    if (app.Environment.IsDevelopment())
+    {
+        app.Use(async (context, next) =>
+        {
+            var path = context.Request.Path.Value ?? string.Empty;
+            if (path.Equals("/swagger", StringComparison.OrdinalIgnoreCase) || path.StartsWith("/swagger/", StringComparison.OrdinalIgnoreCase))
+            {
+                var suffix = path.Length > 8 ? path.Substring(8) : string.Empty; // remove '/swagger'
+                var target = "/openapi" + suffix + context.Request.QueryString;
+                context.Response.Redirect(target);
+                return;
+            }
+
+            await next();
+        });
     }
 
     app.UseRateLimiter();

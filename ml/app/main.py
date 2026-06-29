@@ -19,6 +19,8 @@ from .schemas import (
     ParseResponse,
     RagEvalRequest,
     RagEvalResponse,
+    BenchmarkRequest,
+    BenchmarkResponse,
 )
 from .security import require_internal_key
 
@@ -52,7 +54,12 @@ async def parse_endpoint(file: UploadFile = File(...)) -> ParseResponse:
 
 @app.post("/chunk", dependencies=[Depends(require_internal_key)], response_model=ChunkResponse)
 async def chunk_endpoint(request: ChunkRequest) -> ChunkResponse:
-    chunks = chunking.chunk_pages(request.pages, request.chunk_size, request.chunk_overlap)
+    chunks = chunking.chunk_pages(
+        request.pages,
+        request.chunk_size,
+        request.chunk_overlap,
+        strategy=request.strategy,
+    )
     return ChunkResponse(chunks=chunks)
 
 
@@ -71,3 +78,10 @@ async def embed_endpoint(request: EmbedRequest) -> EmbedResponse:
 async def rag_eval_endpoint(request: RagEvalRequest) -> RagEvalResponse:
     per_item = evaluation.evaluate_items(request.items, request.judge_model)
     return RagEvalResponse(per_item=per_item)
+
+
+@app.post("/benchmark", dependencies=[Depends(require_internal_key)], response_model=BenchmarkResponse)
+async def benchmark_endpoint(request: BenchmarkRequest) -> BenchmarkResponse:
+    # strategies are passed as strings like "fixed", "sentence", "sliding", "semantic:multilingual-e5-base"
+    results = chunking.benchmark_strategies(request.pages, request.strategies, request.chunk_size, request.chunk_overlap)
+    return BenchmarkResponse(results=[r for r in results])

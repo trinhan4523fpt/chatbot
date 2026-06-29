@@ -109,6 +109,14 @@ public class ExperimentRunMetric : Entity
     public decimal? AvgContextRecall { get; set; }
     public decimal? AvgAnswerCorrectness { get; set; }
     public decimal? AvgLatencyMs { get; set; }
+    // Additional retrieval / chunking metrics
+    public int? ChunkCount { get; set; }
+    public decimal? AvgTokens { get; set; }
+    public decimal? ChunkingTimeMs { get; set; }
+    public decimal? RecallAtK { get; set; }
+    public decimal? PrecisionAtK { get; set; }
+    public decimal? Mrr { get; set; }
+    public decimal? Ndcg { get; set; }
     public int TotalQuestions { get; set; }
     public DateTime ComputedAtUtc { get; set; }
 
