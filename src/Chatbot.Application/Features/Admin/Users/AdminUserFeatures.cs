@@ -51,8 +51,12 @@ public sealed class ListUsersQueryHandler(IAppDbContext db) : IRequestHandler<Li
 }
 
 // ---- Create --------------------------------------------------------------------
-public sealed record CreateUserCommand(string Email, string FullName, string? Password, IReadOnlyList<string> Roles)
-    : IRequest<long>;
+
+/// <summary>Kết quả trả về khi tạo user: Id và mật khẩu tạm thời (dùng để gửi email kích hoạt).</summary>
+public sealed record CreateUserResult(long Id, string TempPassword);
+
+public sealed record CreateUserCommand(string Email, string FullName, IReadOnlyList<string> Roles)
+    : IRequest<CreateUserResult>;
 
 public sealed class CreateUserCommandValidator : AbstractValidator<CreateUserCommand>
 {
@@ -60,13 +64,6 @@ public sealed class CreateUserCommandValidator : AbstractValidator<CreateUserCom
     {
         RuleFor(x => x.Email).NotEmpty().EmailAddress().MaximumLength(256);
         RuleFor(x => x.FullName).NotEmpty().MaximumLength(200);
-        RuleFor(x => x.Password)
-            .NotEmpty().WithMessage("Mật khẩu không được để trống.")
-            .When(x => !x.Roles.Contains(RoleDefinitions.Instructor));
-        RuleFor(x => x.Password)
-            .MinimumLength(8).WithMessage("Mật khẩu phải từ 8 ký tự.")
-            .MaximumLength(256)
-            .When(x => !string.IsNullOrEmpty(x.Password));
         RuleFor(x => x.Roles).NotNull();
     }
 }
@@ -75,9 +72,9 @@ public sealed class CreateUserCommandHandler(
     IAppDbContext db,
     IPasswordHasher hasher,
     ICurrentUser currentUser)
-    : IRequestHandler<CreateUserCommand, long>
+    : IRequestHandler<CreateUserCommand, CreateUserResult>
 {
-    public async Task<long> Handle(CreateUserCommand request, CancellationToken ct)
+    public async Task<CreateUserResult> Handle(CreateUserCommand request, CancellationToken ct)
     {
         var normalized = request.Email.ToUpperInvariant();
         if (await db.Users.AnyAsync(u => u.NormalizedEmail == normalized, ct))
@@ -95,18 +92,15 @@ public sealed class CreateUserCommandHandler(
             });
         }
 
-        var password = request.Password;
-        if (string.IsNullOrWhiteSpace(password))
-        {
-            password = GenerateTemporaryPassword();
-        }
+        // Luôn sinh mật khẩu ngẫu nhiên — Admin không cần nhập, mật khẩu sẽ được gửi qua email kích hoạt.
+        var tempPassword = GenerateTemporaryPassword();
 
         var user = new User
         {
             Email = request.Email,
             NormalizedEmail = normalized,
             FullName = request.FullName,
-            PasswordHash = hasher.Hash(password),
+            PasswordHash = hasher.Hash(tempPassword),
             IsActive = true,
             MustChangePassword = true,
             EmailConfirmed = false,
@@ -122,7 +116,7 @@ public sealed class CreateUserCommandHandler(
         });
         await db.SaveChangesAsync(ct);
 
-        return user.Id;
+        return new CreateUserResult(user.Id, tempPassword);
     }
 
     private static string GenerateTemporaryPassword()
