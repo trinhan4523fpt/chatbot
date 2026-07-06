@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 using System.Text;
 using System.Text.Json;
 using Chatbot.Application.Common;
@@ -7,6 +8,7 @@ using Chatbot.Domain.Entities;
 using Chatbot.Domain.Enums;
 using Chatbot.Infrastructure.Options;
 using Chatbot.Infrastructure.Persistence;
+using Chatbot.Infrastructure.Vectors;
 using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -26,6 +28,7 @@ public sealed class RunExperimentJob(
     IChatCompletionService chat,
     IOptions<OllamaOptions> ollamaOptions,
     IClock clock,
+    IFileStorageService storage,
     ILogger<RunExperimentJob> logger)
 {
     private const string SystemInstruction =
@@ -67,6 +70,8 @@ public sealed class RunExperimentJob(
 
         try
         {
+            await EnsureCorpusIndexedAsync(subjectId, embeddingModel, strategyId, ct);
+
             var questions = await db.TestQuestions.Where(q => q.SubjectId == subjectId).OrderBy(q => q.Id).ToListAsync(ct);
             var existingResults = await db.EvaluationResults
                 .Include(r => r.Retrievals)
@@ -277,4 +282,110 @@ public sealed class RunExperimentJob(
 
     private static decimal? ToScore(double? value) =>
         value is { } v ? (decimal)Math.Round(Math.Clamp(v, 0, 1), 6) : null;
+
+    private async Task EnsureCorpusIndexedAsync(
+        long subjectId,
+        EmbeddingModel embeddingModel,
+        long strategyId,
+        CancellationToken ct)
+    {
+        var docs = await db.Documents
+            .Where(d => d.SubjectId == subjectId && d.Status == DocumentStatus.Indexed)
+            .ToListAsync(ct);
+
+        foreach (var doc in docs)
+        {
+            var chunksCount = await db.DocumentChunks
+                .CountAsync(c => c.DocumentId == doc.Id && c.ChunkingStrategyId == strategyId, ct);
+
+            var indexedEmbeddingsCount = await db.DocumentChunks
+                .Where(c => c.DocumentId == doc.Id && c.ChunkingStrategyId == strategyId)
+                .SelectMany(c => c.Embeddings)
+                .CountAsync(e => e.EmbeddingModelId == embeddingModel.Id && e.Status == ChunkEmbeddingStatus.Indexed, ct);
+
+            if (chunksCount == 0 || chunksCount != indexedEmbeddingsCount)
+            {
+                logger.LogInformation("Dynamically indexing document {DocumentId} ({DocumentTitle}) for strategy {StrategyId} and embedding model {EmbeddingModelId}.", 
+                    doc.Id, doc.Title, strategyId, embeddingModel.Id);
+
+                var physicalPath = storage.ResolvePhysicalPath(doc.RelativePath);
+                var bytes = await File.ReadAllBytesAsync(physicalPath, ct);
+
+                var parsed = await ai.ParseAsync(bytes, doc.OriginalFileName, ct);
+
+                var strategy = await db.ChunkingStrategies.FirstAsync(s => s.Id == strategyId, ct);
+                var chunks = await ai.ChunkAsync(
+                    parsed.Pages, strategy.Name, strategy.ChunkSize ?? 512, strategy.ChunkOverlap ?? 50, ct);
+
+                if (chunks.Count == 0)
+                {
+                    logger.LogWarning("No chunks extracted from document {DocumentId} during dynamic indexing.", doc.Id);
+                    continue;
+                }
+
+                var existingChunks = await db.DocumentChunks
+                    .Where(c => c.DocumentId == doc.Id && c.ChunkingStrategyId == strategyId)
+                    .ToListAsync(ct);
+                db.DocumentChunks.RemoveRange(existingChunks);
+                await db.SaveChangesAsync(ct);
+
+                var chunkEntities = chunks
+                    .Select(c => new DocumentChunk
+                    {
+                        DocumentId = doc.Id,
+                        ChunkingStrategyId = strategyId,
+                        ChunkIndex = c.Index,
+                        Content = c.Content,
+                        PageNumber = c.Page,
+                        TokenCount = c.TokenCount,
+                    })
+                    .ToList();
+                db.DocumentChunks.AddRange(chunkEntities);
+                await db.SaveChangesAsync(ct);
+
+                var collectionName = VectorCollectionNaming.For(embeddingModel.QdrantCollectionName, strategyId);
+                await vectors.EnsureCollectionAsync(collectionName, embeddingModel.Dimension, ct);
+                await vectors.DeleteByDocumentAsync(collectionName, doc.Id, ct);
+
+                var chunkVectors = new List<ChunkVector>(chunkEntities.Count);
+                const int EmbedBatchSize = 64;
+
+                foreach (var batch in chunkEntities.Chunk(EmbedBatchSize))
+                {
+                    var embeddingResult = await ai.EmbedAsync(
+                        batch.Select(c => c.Content).ToList(), embeddingModel.Name, "passage", ct);
+                    if (embeddingResult.Dim != embeddingModel.Dimension)
+                    {
+                        throw new InvalidOperationException(
+                            $"Embedding dimension mismatch for '{embeddingModel.Name}': expected {embeddingModel.Dimension}, got {embeddingResult.Dim}.");
+                    }
+
+                    for (var i = 0; i < batch.Length; i++)
+                    {
+                        var chunk = batch[i];
+                        var pointId = PointIds.For(chunk.Id, embeddingModel.Id);
+                        chunkVectors.Add(new ChunkVector(
+                            pointId, embeddingResult.Vectors[i], chunk.Id, doc.Id, doc.SubjectId,
+                            doc.ChapterId, strategyId, embeddingModel.Id, chunk.PageNumber, chunk.TokenCount));
+                        db.ChunkEmbeddings.Add(new ChunkEmbedding
+                        {
+                            ChunkId = chunk.Id,
+                            EmbeddingModelId = embeddingModel.Id,
+                            VectorCollection = collectionName,
+                            VectorPointId = pointId,
+                            Dimension = embeddingResult.Dim,
+                            Status = ChunkEmbeddingStatus.Indexed,
+                            IndexedAtUtc = clock.UtcNow,
+                        });
+                    }
+                }
+
+                await vectors.UpsertChunksAsync(collectionName, chunkVectors, ct);
+                await db.SaveChangesAsync(ct);
+
+                logger.LogInformation("Successfully dynamically indexed document {DocumentId} into collection {CollectionName}.", 
+                    doc.Id, collectionName);
+            }
+        }
+    }
 }

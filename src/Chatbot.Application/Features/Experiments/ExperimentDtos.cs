@@ -24,4 +24,9 @@ public sealed record RunMetricDto(
     long ExperimentRunId, string RunName, RunStatus Status,
     string? EmbeddingModel, string? ChunkingStrategy, string? LlmModel,
     decimal? AvgFaithfulness, decimal? AvgAnswerRelevancy, decimal? AvgContextPrecision,
-    decimal? AvgContextRecall, decimal? AvgAnswerCorrectness, decimal? AvgLatencyMs, int TotalQuestions);
+    decimal? AvgContextRecall, decimal? AvgAnswerCorrectness, decimal? AvgLatencyMs,
+    int TotalQuestions,
+    int? ChunkCount, decimal? AvgTokens, decimal? ChunkingTimeMs,
+    decimal? RecallAtK, decimal? PrecisionAtK, decimal? Mrr, decimal? Ndcg);
+
+

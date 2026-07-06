@@ -51,8 +51,12 @@ public sealed class ListUsersQueryHandler(IAppDbContext db) : IRequestHandler<Li
 }
 
 // ---- Create --------------------------------------------------------------------
-public sealed record CreateUserCommand(string Email, string FullName, string Password, IReadOnlyList<string> Roles)
-    : IRequest<long>;
+
+/// <summary>Kết quả trả về khi tạo user: Id và mật khẩu tạm thời (dùng để gửi email kích hoạt).</summary>
+public sealed record CreateUserResult(long Id, string TempPassword);
+
+public sealed record CreateUserCommand(string Email, string FullName, IReadOnlyList<string> Roles)
+    : IRequest<CreateUserResult>;
 
 public sealed class CreateUserCommandValidator : AbstractValidator<CreateUserCommand>
 {
@@ -60,15 +64,17 @@ public sealed class CreateUserCommandValidator : AbstractValidator<CreateUserCom
     {
         RuleFor(x => x.Email).NotEmpty().EmailAddress().MaximumLength(256);
         RuleFor(x => x.FullName).NotEmpty().MaximumLength(200);
-        RuleFor(x => x.Password).NotEmpty().MinimumLength(8).MaximumLength(256);
         RuleFor(x => x.Roles).NotNull();
     }
 }
 
-public sealed class CreateUserCommandHandler(IAppDbContext db, IPasswordHasher hasher, ICurrentUser currentUser)
-    : IRequestHandler<CreateUserCommand, long>
+public sealed class CreateUserCommandHandler(
+    IAppDbContext db,
+    IPasswordHasher hasher,
+    ICurrentUser currentUser)
+    : IRequestHandler<CreateUserCommand, CreateUserResult>
 {
-    public async Task<long> Handle(CreateUserCommand request, CancellationToken ct)
+    public async Task<CreateUserResult> Handle(CreateUserCommand request, CancellationToken ct)
     {
         var normalized = request.Email.ToUpperInvariant();
         if (await db.Users.AnyAsync(u => u.NormalizedEmail == normalized, ct))
@@ -86,15 +92,18 @@ public sealed class CreateUserCommandHandler(IAppDbContext db, IPasswordHasher h
             });
         }
 
+        // Luôn sinh mật khẩu ngẫu nhiên — Admin không cần nhập, mật khẩu sẽ được gửi qua email kích hoạt.
+        var tempPassword = GenerateTemporaryPassword();
+
         var user = new User
         {
             Email = request.Email,
             NormalizedEmail = normalized,
             FullName = request.FullName,
-            PasswordHash = hasher.Hash(request.Password),
+            PasswordHash = hasher.Hash(tempPassword),
             IsActive = true,
             MustChangePassword = true,
-            EmailConfirmed = true,
+            EmailConfirmed = false,
             UserRoles = [.. roles.Select(r => new UserRole { RoleId = r.Id })],
         };
         db.Users.Add(user);
@@ -106,7 +115,38 @@ public sealed class CreateUserCommandHandler(IAppDbContext db, IPasswordHasher h
             TargetUserId = user.Id, TargetType = "User", TargetId = user.Id.ToString(),
         });
         await db.SaveChangesAsync(ct);
-        return user.Id;
+
+        return new CreateUserResult(user.Id, tempPassword);
+    }
+
+    private static string GenerateTemporaryPassword()
+    {
+        const string lower = "abcdefghijklmnopqrstuvwxyz";
+        const string upper = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+        const string digits = "0123456789";
+        
+        var random = new Random();
+        var chars = new char[12];
+        
+        chars[0] = lower[random.Next(lower.Length)];
+        chars[1] = upper[random.Next(upper.Length)];
+        chars[2] = digits[random.Next(digits.Length)];
+        
+        const string all = lower + upper + digits;
+        for (int i = 3; i < chars.Length; i++)
+        {
+            chars[i] = all[random.Next(all.Length)];
+        }
+        
+        for (int i = chars.Length - 1; i > 0; i--)
+        {
+            int j = random.Next(i + 1);
+            var temp = chars[i];
+            chars[i] = chars[j];
+            chars[j] = temp;
+        }
+        
+        return new string(chars);
     }
 }
 
