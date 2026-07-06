@@ -68,7 +68,7 @@ public sealed class GetChatMessagesQueryHandler(IAppDbContext db, ICurrentUser c
             ?? throw new NotFoundException("Không tìm thấy phiên chat.");
 
         var canReadAny = currentUser.Roles.Contains(RoleDefinitions.Admin)
-                         || currentUser.Roles.Contains(RoleDefinitions.Researcher);
+                         || currentUser.Roles.Contains(RoleDefinitions.Lecturer);
         if (session.UserId != currentUser.UserId && !canReadAny)
         {
             throw new ForbiddenException("Bạn không có quyền xem phiên chat này.");

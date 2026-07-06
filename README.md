@@ -133,7 +133,7 @@ Chạy benchmark (tóm tắt — chi tiết + bảng số liệu: [docs/RESEARCH
 
 ## Tài khoản & bảo mật
 
-- Tài khoản do Admin cấp (không tự đăng ký); buộc đổi mật khẩu lần đầu.
-- Phân quyền theo RBAC (Admin / Researcher / Student) bằng permission policy.
+- Tài khoản do Admin cấp (không tự đăng ký).
+- Phân quyền theo RBAC (Admin / Lecturer / Student) bằng permission policy.
 - File tài liệu lưu static ngoài web root, tải về qua endpoint có kiểm tra quyền.
 - Secrets qua `.env` / user-secrets; **không commit** `.env`.

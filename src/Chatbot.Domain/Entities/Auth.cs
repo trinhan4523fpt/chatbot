@@ -29,7 +29,7 @@ public class User : AuditableEntity, ISoftDeletable
     public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
 }
 
-/// <summary>A named RBAC role (Admin / Researcher / Student). System roles cannot be deleted.</summary>
+/// <summary>A named RBAC role (Admin / Lecturer / Student). System roles cannot be deleted.</summary>
 public class Role : AuditableEntity
 {
     public string Name { get; set; } = string.Empty;
