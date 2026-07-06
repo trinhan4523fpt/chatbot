@@ -9,8 +9,7 @@ public interface IJwtTokenService
         string email,
         string fullName,
         string securityStamp,
-        IReadOnlyCollection<string> roles,
-        bool passwordChangeRequired);
+        IReadOnlyCollection<string> roles);
 
     /// <summary>Generates a cryptographically-random refresh token (raw value, returned once).</summary>
     string GenerateRefreshToken();

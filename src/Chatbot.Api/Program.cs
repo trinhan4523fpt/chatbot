@@ -136,7 +136,6 @@ try
     app.UseRateLimiter();
     app.UseAuthentication();
     app.UseAuthorization();
-    app.UseMiddleware<PasswordChangeGateMiddleware>();
 
     app.UseHangfireDashboard("/hangfire", new DashboardOptions
     {
