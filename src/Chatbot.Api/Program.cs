@@ -27,7 +27,8 @@ try
     builder.Services.AddApplication();
     builder.Services.AddInfrastructure(builder.Configuration);
     builder.Services.AddWebApi(builder.Configuration);
-    builder.Services.AddOpenApi();
+    builder.Services.AddOpenApi(options =>
+        options.AddDocumentTransformer<Chatbot.Api.OpenApi.ServersDocumentTransformer>());
 
     // --- Health checks: three tiers -------------------------------------------------
     var sqlConnectionString = builder.Configuration.GetConnectionString("SqlServer");
