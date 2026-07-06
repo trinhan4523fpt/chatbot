@@ -26,11 +26,18 @@ public sealed class AssignInstructorCommandHandler(IAppDbContext db, ICurrentUse
             throw new NotFoundException("Không tìm thấy người dùng.");
         }
 
-        var exists = await db.SubjectInstructors
-            .AnyAsync(si => si.SubjectId == request.SubjectId && si.UserId == request.UserId, ct);
-        if (exists)
+        // One instructor per subject: reject a different instructor; same instructor is idempotent.
+        var current = await db.SubjectInstructors
+            .FirstOrDefaultAsync(si => si.SubjectId == request.SubjectId, ct);
+        if (current is not null)
         {
-            return Unit.Value; // idempotent
+            if (current.UserId == request.UserId)
+            {
+                return Unit.Value; // already assigned
+            }
+
+            throw new ConflictException(
+                "Môn học này đã có giảng viên phụ trách. Hãy gỡ giảng viên hiện tại trước khi gán người khác.");
         }
 
         db.SubjectInstructors.Add(new SubjectInstructor
