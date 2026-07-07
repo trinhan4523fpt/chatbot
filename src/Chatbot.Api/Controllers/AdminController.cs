@@ -68,7 +68,6 @@ public sealed class AdminController(
         // Kích hoạt tài khoản + cập nhật mật khẩu mới do user tự chọn
         user.EmailConfirmed = true;
         user.PasswordHash = passwordHasher.Hash(request.NewPassword);
-        user.MustChangePassword = false;
         user.SecurityStamp = Guid.NewGuid().ToString("N"); // invalidate cũ nếu có token nào đó
 
         await db.SaveChangesAsync(ct);

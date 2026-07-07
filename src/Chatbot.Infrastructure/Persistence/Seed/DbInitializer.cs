@@ -211,13 +211,12 @@ public sealed class DbInitializer(
             NormalizedEmail = normalizedEmail,
             PasswordHash = passwordHasher.Hash(_seed.Admin.Password),
             IsActive = true,
-            MustChangePassword = true,
             EmailConfirmed = true,
             UserRoles = [new UserRole { RoleId = adminRole.Id }],
         };
         db.Users.Add(admin);
         await db.SaveChangesAsync(ct);
-        logger.LogInformation("Seeded admin user {Email} (must change password on first login).", _seed.Admin.Email);
+        logger.LogInformation("Seeded admin user {Email}.", _seed.Admin.Email);
     }
 
     private async Task SeedTestQuestionsAsync(CancellationToken ct)

@@ -23,6 +23,6 @@ public sealed class GetMeQueryHandler(IAppDbContext db) : IRequestHandler<GetMeQ
             .Distinct()
             .ToListAsync(ct);
 
-        return new CurrentUserDto(user.Id, user.Email, user.FullName, user.MustChangePassword, roles, permissions);
+        return new CurrentUserDto(user.Id, user.Email, user.FullName, roles, permissions);
     }
 }

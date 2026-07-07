@@ -43,6 +43,6 @@ internal static class AuthTokenHelper
         });
 
         await db.SaveChangesAsync(ct);
-        return new TokenResponse(access.Token, access.ExpiresAtUtc, rawRefresh, user.MustChangePassword);
+        return new TokenResponse(access.Token, access.ExpiresAtUtc, rawRefresh);
     }
 }

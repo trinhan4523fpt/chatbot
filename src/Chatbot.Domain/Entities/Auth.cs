@@ -14,7 +14,6 @@ public class User : AuditableEntity, ISoftDeletable
     public string SecurityStamp { get; set; } = Guid.NewGuid().ToString("N");
 
     public bool IsActive { get; set; } = true;
-    public bool MustChangePassword { get; set; } = true;
     public bool EmailConfirmed { get; set; }
     public DateTime? LastLoginUtc { get; set; }
     public int AccessFailedCount { get; set; }
