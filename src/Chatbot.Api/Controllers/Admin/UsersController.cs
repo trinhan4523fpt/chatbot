@@ -42,54 +42,53 @@ public sealed class UsersController(
         var result = await mediator.Send(
             new CreateUserCommand(request.Email, request.FullName, request.Roles ?? []), ct);
 
-        // Sinh mã kích hoạt OTP 6 chữ số (crypto-safe)
+        // Sinh mã xác nhận OTP 6 chữ số (crypto-safe)
         var code = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
-        var cacheKey = $"email_confirm:{request.Email.ToUpperInvariant()}";
+        var normalizedEmail = request.Email.ToUpperInvariant();
+        var cacheKey = $"email_confirm:{normalizedEmail}";
         cache.Set(cacheKey, code, TimeSpan.FromHours(24));
 
-        // Tạo link kích hoạt trỏ về frontend
+        // Lưu mật khẩu tạm thời vào cache — sẽ gửi sau khi user xác nhận email
+        var pwCacheKey = $"temp_password:{normalizedEmail}";
+        cache.Set(pwCacheKey, result.TempPassword, TimeSpan.FromHours(24));
+
+        // Tạo link xác nhận email trỏ về frontend
         var opts = emailOptions.Value;
-        var activationLink =
-            $"{opts.ClientUrl.TrimEnd('/')}/setup-account" +
+        var confirmLink =
+            $"{opts.ClientUrl.TrimEnd('/')}/confirm-email" +
             $"?email={Uri.EscapeDataString(request.Email)}&code={code}";
 
-        // Gửi email kích hoạt
-        var subject = "Kích hoạt tài khoản - Chatbot Learning System";
+        // Gửi email xác nhận địa chỉ email (chưa có tài khoản/mật khẩu)
+        var subject = "Xác nhận email - Chatbot Learning System";
         var body = $"""
             <div style="font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;max-width:600px;margin:0 auto;padding:20px;border:1px solid #e2e8f0;border-radius:8px;background:#ffffff;color:#1a202c;">
                 <div style="text-align:center;margin-bottom:24px;padding-bottom:20px;border-bottom:2px solid #edf2f7;">
                     <h2 style="color:#2b6cb0;margin:0;font-size:24px;">Chatbot Learning System</h2>
-                    <p style="color:#718096;margin:5px 0 0;font-size:14px;">Kích hoạt tài khoản của bạn</p>
+                    <p style="color:#718096;margin:5px 0 0;font-size:14px;">Xác nhận địa chỉ email của bạn</p>
                 </div>
 
                 <div style="line-height:1.7;font-size:15px;">
                     <p>Xin chào <strong>{request.FullName}</strong>,</p>
-                    <p>Tài khoản của bạn đã được tạo thành công trên hệ thống. Dưới đây là thông tin đăng nhập <strong>tạm thời</strong>:</p>
-
-                    <div style="background:#f7fafc;border-left:4px solid #2b6cb0;padding:16px;margin:20px 0;border-radius:4px;">
-                        <p style="margin:0 0 8px;"><strong>Email đăng nhập:</strong>
-                            <span style="font-family:monospace;font-size:15px;color:#2d3748;">{request.Email}</span></p>
-                        <p style="margin:0;"><strong>Mật khẩu tạm thời:</strong>
-                            <span style="font-family:monospace;font-size:15px;color:#e53e3e;font-weight:bold;background:#fff;padding:2px 6px;border:1px dashed #cbd5e0;border-radius:3px;">{result.TempPassword}</span></p>
-                    </div>
-
-                    <p style="color:#e53e3e;font-weight:bold;">⚠️ Quan trọng:</p>
-                    <ul style="padding-left:20px;margin-top:5px;">
-                        <li>Mật khẩu trên chỉ là tạm thời, dùng để xác nhận danh tính.</li>
-                        <li>Nhấn vào nút bên dưới để <strong>kích hoạt tài khoản và đặt mật khẩu mới</strong> theo ý bạn.</li>
-                        <li>Link này có hiệu lực trong <strong>24 giờ</strong>.</li>
-                    </ul>
+                    <p>Quản trị viên đã tạo tài khoản cho bạn trên hệ thống <strong>Chatbot Learning System</strong>.</p>
+                    <p>Để hoàn tất đăng ký, vui lòng xác nhận địa chỉ email của bạn bằng cách nhấn vào nút bên dưới:</p>
 
                     <div style="text-align:center;margin:32px 0;">
-                        <a href="{activationLink}"
+                        <a href="{confirmLink}"
                            style="display:inline-block;background:#2b6cb0;color:#ffffff;text-decoration:none;padding:14px 32px;border-radius:6px;font-size:16px;font-weight:bold;">
-                            ✅ Kích hoạt tài khoản &amp; đặt mật khẩu mới
+                            ✅ Xác nhận email
                         </a>
                     </div>
 
+                    <p style="color:#e53e3e;font-weight:bold;">⚠️ Lưu ý:</p>
+                    <ul style="padding-left:20px;margin-top:5px;">
+                        <li>Link xác nhận có hiệu lực trong <strong>24 giờ</strong>.</li>
+                        <li>Sau khi xác nhận, hệ thống sẽ gửi thông tin tài khoản và mật khẩu đến email này.</li>
+                        <li>Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email.</li>
+                    </ul>
+
                     <p style="font-size:13px;color:#718096;">
                         Nếu nút trên không hoạt động, hãy copy link sau vào trình duyệt:<br/>
-                        <a href="{activationLink}" style="color:#2b6cb0;word-break:break-all;">{activationLink}</a>
+                        <a href="{confirmLink}" style="color:#2b6cb0;word-break:break-all;">{confirmLink}</a>
                     </p>
                 </div>
 
@@ -101,7 +100,7 @@ public sealed class UsersController(
             """;
 
         await emailService.SendEmailAsync(request.Email, subject, body);
-        logger.LogInformation("Đã gửi email kích hoạt tài khoản tới {Email}.", request.Email);
+        logger.LogInformation("Đã gửi email xác nhận địa chỉ email tới {Email}.", request.Email);
 
         return CreatedAtAction(nameof(List), new { id = result.Id }, new { id = result.Id });
     }

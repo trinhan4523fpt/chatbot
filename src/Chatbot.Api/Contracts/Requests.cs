@@ -19,6 +19,3 @@ public sealed record CreateChatSessionRequest(long SubjectId, string? Title);
 public sealed record SendMessageRequest(string Content);
 
 public sealed record ConfirmEmailRequest(string Email, string Code);
-
-/// <summary>Dùng trong flow kích hoạt tài khoản: xác thực mã OTP và đặt mật khẩu mới cùng lúc.</summary>
-public sealed record ConfirmAndSetupPasswordRequest(string Email, string Code, string NewPassword);
