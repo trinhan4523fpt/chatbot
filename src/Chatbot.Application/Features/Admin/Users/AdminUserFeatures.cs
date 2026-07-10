@@ -10,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Chatbot.Application.Features.Admin.Users;
 
 public sealed record AdminUserDto(
-    long Id, string Email, string FullName, bool IsActive, bool MustChangePassword,
+    long Id, string Email, string FullName, bool IsActive,
     DateTime? LastLoginUtc, IReadOnlyList<string> Roles);
 
 // ---- List ----------------------------------------------------------------------
@@ -42,7 +42,7 @@ public sealed class ListUsersQueryHandler(IAppDbContext db) : IRequestHandler<Li
             .OrderBy(u => u.Email).ThenBy(u => u.Id)
             .Skip((request.Page - 1) * request.PageSize).Take(request.PageSize)
             .Select(u => new AdminUserDto(
-                u.Id, u.Email, u.FullName, u.IsActive, u.MustChangePassword, u.LastLoginUtc,
+                u.Id, u.Email, u.FullName, u.IsActive, u.LastLoginUtc,
                 u.UserRoles.Select(ur => ur.Role.Name).ToList()))
             .ToListAsync(ct);
 
@@ -102,7 +102,6 @@ public sealed class CreateUserCommandHandler(
             FullName = request.FullName,
             PasswordHash = hasher.Hash(tempPassword),
             IsActive = true,
-            MustChangePassword = true,
             EmailConfirmed = false,
             UserRoles = [.. roles.Select(r => new UserRole { RoleId = r.Id })],
         };
@@ -222,7 +221,6 @@ public sealed class ResetUserPasswordCommandHandler(
             ?? throw new NotFoundException("Không tìm thấy người dùng.");
 
         user.PasswordHash = hasher.Hash(request.NewPassword);
-        user.MustChangePassword = true;
         user.SecurityStamp = Guid.NewGuid().ToString("N");
 
         var active = await db.RefreshTokens

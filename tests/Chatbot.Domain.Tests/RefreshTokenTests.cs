@@ -26,10 +26,9 @@ public class RefreshTokenTests
     }
 
     [Fact]
-    public void NewUser_DefaultsToMustChangePasswordAndHasSecurityStamp()
+    public void NewUser_IsActiveAndHasSecurityStamp()
     {
         var user = new User();
-        Assert.True(user.MustChangePassword);
         Assert.True(user.IsActive);
         Assert.False(string.IsNullOrWhiteSpace(user.SecurityStamp));
     }

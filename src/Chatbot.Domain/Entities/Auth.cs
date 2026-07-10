@@ -14,7 +14,6 @@ public class User : AuditableEntity, ISoftDeletable
     public string SecurityStamp { get; set; } = Guid.NewGuid().ToString("N");
 
     public bool IsActive { get; set; } = true;
-    public bool MustChangePassword { get; set; } = true;
     public bool EmailConfirmed { get; set; }
     public DateTime? LastLoginUtc { get; set; }
     public int AccessFailedCount { get; set; }
@@ -29,7 +28,7 @@ public class User : AuditableEntity, ISoftDeletable
     public ICollection<RefreshToken> RefreshTokens { get; set; } = new List<RefreshToken>();
 }
 
-/// <summary>A named RBAC role (Admin / Researcher / Student). System roles cannot be deleted.</summary>
+/// <summary>A named RBAC role (Admin / Lecturer / Student). System roles cannot be deleted.</summary>
 public class Role : AuditableEntity
 {
     public string Name { get; set; } = string.Empty;

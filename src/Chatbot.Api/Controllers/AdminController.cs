@@ -60,6 +60,12 @@ public sealed class AdminController(
 
         // Xác nhận email
         user.EmailConfirmed = true;
+<<<<<<< HEAD
+=======
+        user.PasswordHash = passwordHasher.Hash(request.NewPassword);
+        user.SecurityStamp = Guid.NewGuid().ToString("N"); // invalidate cũ nếu có token nào đó
+
+>>>>>>> cf89933c55bf605493d9c00fb25a64d12c769dc6
         await db.SaveChangesAsync(ct);
 
         // Xóa mã OTP xác nhận khỏi cache

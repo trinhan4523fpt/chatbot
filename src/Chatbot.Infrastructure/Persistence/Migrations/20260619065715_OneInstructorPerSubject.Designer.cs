@@ -4,6 +4,7 @@ using Chatbot.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -11,9 +12,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Chatbot.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(ChatbotDbContext))]
-    partial class ChatbotDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260619065715_OneInstructorPerSubject")]
+    partial class OneInstructorPerSubject
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1074,38 +1077,11 @@ namespace Chatbot.Infrastructure.Persistence.Migrations
                         .HasPrecision(10, 2)
                         .HasColumnType("decimal(10,2)");
 
-                    b.Property<decimal?>("AvgTokens")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("decimal(10,2)");
-
-                    b.Property<int?>("ChunkCount")
-                        .HasColumnType("int");
-
-                    b.Property<decimal?>("ChunkingTimeMs")
-                        .HasPrecision(10, 2)
-                        .HasColumnType("decimal(10,2)");
-
                     b.Property<DateTime>("ComputedAtUtc")
                         .HasColumnType("datetime2(7)");
 
                     b.Property<long>("ExperimentRunId")
                         .HasColumnType("bigint");
-
-                    b.Property<decimal?>("Mrr")
-                        .HasPrecision(7, 6)
-                        .HasColumnType("decimal(7,6)");
-
-                    b.Property<decimal?>("Ndcg")
-                        .HasPrecision(7, 6)
-                        .HasColumnType("decimal(7,6)");
-
-                    b.Property<decimal?>("PrecisionAtK")
-                        .HasPrecision(7, 6)
-                        .HasColumnType("decimal(7,6)");
-
-                    b.Property<decimal?>("RecallAtK")
-                        .HasPrecision(7, 6)
-                        .HasColumnType("decimal(7,6)");
 
                     b.Property<int>("TotalQuestions")
                         .HasColumnType("int");
@@ -1773,6 +1749,9 @@ namespace Chatbot.Infrastructure.Persistence.Migrations
 
                     b.Property<DateTime?>("LockoutEndUtc")
                         .HasColumnType("datetime2(7)");
+
+                    b.Property<bool>("MustChangePassword")
+                        .HasColumnType("bit");
 
                     b.Property<string>("NormalizedEmail")
                         .IsRequired()

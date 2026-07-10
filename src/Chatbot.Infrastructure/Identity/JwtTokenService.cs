@@ -12,14 +12,13 @@ namespace Chatbot.Infrastructure.Identity;
 public sealed class JwtTokenService(IOptions<JwtOptions> options, IClock clock) : IJwtTokenService
 {
     public const string SecurityStampClaim = "security_stamp";
-    public const string PasswordChangeRequiredClaim = "pwd_change_required";
     public const string RoleClaim = "role";
 
     private readonly JwtOptions _options = options.Value;
 
     public AccessToken CreateAccessToken(
         long userId, string email, string fullName, string securityStamp,
-        IReadOnlyCollection<string> roles, bool passwordChangeRequired)
+        IReadOnlyCollection<string> roles)
     {
         var now = clock.UtcNow;
         var expires = now.AddMinutes(_options.AccessTokenMinutes);
@@ -33,11 +32,6 @@ public sealed class JwtTokenService(IOptions<JwtOptions> options, IClock clock) 
             new(JwtRegisteredClaimNames.Jti, jwtId),
             new(SecurityStampClaim, securityStamp),
         };
-        if (passwordChangeRequired)
-        {
-            claims.Add(new Claim(PasswordChangeRequiredClaim, "true"));
-        }
-
         foreach (var role in roles)
         {
             claims.Add(new Claim(RoleClaim, role));

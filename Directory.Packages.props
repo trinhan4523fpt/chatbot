@@ -38,6 +38,8 @@
     <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.8" />
     <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.8" />
     <PackageVersion Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.19.1" />
+    <!-- Transitive pin: Microsoft.AspNetCore.OpenApi pulls Microsoft.OpenApi 2.0.0 (advisory GHSA-v5pm-xwqc-g5wc, fixed in 2.7.5). -->
+    <PackageVersion Include="Microsoft.OpenApi" Version="2.7.6" />
     <!-- Transitive pin: Hangfire pulls Newtonsoft.Json 11.0.1 (advisory GHSA-5crp-9r3c-p9vr). -->
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageVersion Include="OllamaSharp" Version="5.4.25" />

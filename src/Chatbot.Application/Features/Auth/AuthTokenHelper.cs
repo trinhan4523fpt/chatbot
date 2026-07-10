@@ -19,7 +19,7 @@ internal static class AuthTokenHelper
         RefreshToken? rotatedFrom = null)
     {
         var access = jwt.CreateAccessToken(
-            user.Id, user.Email, user.FullName, user.SecurityStamp, roles, user.MustChangePassword);
+            user.Id, user.Email, user.FullName, user.SecurityStamp, roles);
 
         var rawRefresh = jwt.GenerateRefreshToken();
         var newHash = jwt.HashRefreshToken(rawRefresh);
@@ -43,6 +43,6 @@ internal static class AuthTokenHelper
         });
 
         await db.SaveChangesAsync(ct);
-        return new TokenResponse(access.Token, access.ExpiresAtUtc, rawRefresh, user.MustChangePassword);
+        return new TokenResponse(access.Token, access.ExpiresAtUtc, rawRefresh);
     }
 }

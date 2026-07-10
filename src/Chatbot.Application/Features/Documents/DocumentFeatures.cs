@@ -243,7 +243,7 @@ public sealed class DownloadDocumentQueryHandler(IAppDbContext db, IFileStorageS
             ?? throw new NotFoundException("Không tìm thấy tài liệu.");
 
         var privileged = currentUser.Roles.Contains(RoleDefinitions.Admin)
-                         || currentUser.Roles.Contains(RoleDefinitions.Researcher);
+                         || currentUser.Roles.Contains(RoleDefinitions.Lecturer);
         if (!privileged)
         {
             var enrolled = currentUser.UserId is { } uid &&

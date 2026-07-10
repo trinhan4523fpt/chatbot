@@ -41,7 +41,6 @@ public sealed class ChangePasswordCommandHandler(IAppDbContext db, IPasswordHash
         }
 
         user.PasswordHash = hasher.Hash(request.NewPassword);
-        user.MustChangePassword = false;
         user.SecurityStamp = Guid.NewGuid().ToString("N"); // revokes existing access tokens within the cache SLA
 
         // Revoke all refresh tokens -> force re-login on other devices.

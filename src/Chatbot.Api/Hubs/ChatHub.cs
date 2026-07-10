@@ -18,12 +18,6 @@ public sealed class ChatHub(IRagChatService rag, SecurityStampService security) 
     {
         var user = Context.User!;
 
-        if (user.HasClaim(JwtTokenService.PasswordChangeRequiredClaim, "true"))
-        {
-            await Clients.Caller.SendAsync("Error", "password_change_required");
-            return;
-        }
-
         var sub = user.FindFirst(JwtRegisteredClaimNames.Sub)?.Value;
         var stamp = user.FindFirst(JwtTokenService.SecurityStampClaim)?.Value;
         if (!long.TryParse(sub, out var userId) || stamp is null || !await security.IsValidAsync(userId, stamp))

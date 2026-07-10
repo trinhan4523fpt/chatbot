@@ -105,11 +105,11 @@ public static class Permissions
 public static class RoleDefinitions
 {
     public const string Admin = "Admin";
-    public const string Researcher = "Researcher";
+    public const string Lecturer = "Lecturer";
     public const string Instructor = "Instructor";
     public const string Student = "Student";
 
-    public static readonly IReadOnlyList<string> AllRoles = [Admin, Researcher, Instructor, Student];
+    public static readonly IReadOnlyList<string> AllRoles = [Admin, Lecturer, Instructor, Student];
 
     private static readonly string[] ProfileSelf =
         [Permissions.Profile.ReadSelf, Permissions.Profile.ChangePasswordSelf];
@@ -119,7 +119,7 @@ public static class RoleDefinitions
         new Dictionary<string, string[]>
         {
             [Admin] = [.. Permissions.All.Select(p => p.Code)],
-            [Researcher] =
+            [Lecturer] =
             [
                 Permissions.Catalog.SubjectsManage, Permissions.Catalog.ChaptersManage,
                 Permissions.Documents.Upload, Permissions.Documents.Read, Permissions.Documents.ReadChunks,

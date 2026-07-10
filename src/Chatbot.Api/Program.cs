@@ -27,7 +27,8 @@ try
     builder.Services.AddApplication();
     builder.Services.AddInfrastructure(builder.Configuration);
     builder.Services.AddWebApi(builder.Configuration);
-    builder.Services.AddOpenApi();
+    builder.Services.AddOpenApi(options =>
+        options.AddDocumentTransformer<Chatbot.Api.OpenApi.ServersDocumentTransformer>());
     // Note: Swashbuckle (AddSwaggerGen) was removed due to runtime incompatibility with the
     // current target framework/runtime. OpenAPI endpoints are provided by Microsoft.AspNetCore.OpenApi
     // (MapOpenApi) and a compatible Swagger/Docs setup can be added later when a compatible
@@ -135,7 +136,6 @@ try
     app.UseRateLimiter();
     app.UseAuthentication();
     app.UseAuthorization();
-    app.UseMiddleware<PasswordChangeGateMiddleware>();
 
     app.UseHangfireDashboard("/hangfire", new DashboardOptions
     {

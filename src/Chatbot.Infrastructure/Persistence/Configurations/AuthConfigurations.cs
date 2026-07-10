@@ -121,6 +121,8 @@ public sealed class SubjectInstructorConfiguration : IEntityTypeConfiguration<Su
         b.HasOne(x => x.Subject).WithMany(s => s.Instructors)
             .HasForeignKey(x => x.SubjectId).OnDelete(DeleteBehavior.Restrict);
 
+        // One instructor per subject (backstop for the application-level check).
+        b.HasIndex(x => x.SubjectId).IsUnique().HasDatabaseName("UQ_SubjectInstructor_SubjectId");
         b.HasIndex(x => x.UserId).HasDatabaseName("IX_SubjectInstructor_UserId");
     }
 }
