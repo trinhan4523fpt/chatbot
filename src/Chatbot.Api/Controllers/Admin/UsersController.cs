@@ -7,6 +7,7 @@ using Chatbot.Application.Features.Admin.Users;
 using Chatbot.Infrastructure.Options;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Options;
 using System.Security.Cryptography;
@@ -17,6 +18,7 @@ namespace Chatbot.Api.Controllers.Admin;
 [Route("api/v1/admin/users")]
 public sealed class UsersController(
     ISender mediator,
+    IAppDbContext db,
     IEmailService emailService,
     IMemoryCache cache,
     IOptions<EmailOptions> emailOptions,
@@ -31,34 +33,90 @@ public sealed class UsersController(
 
     /// <summary>
     /// Admin tạo tài khoản cho giảng viên / sinh viên.
-    /// Hệ thống tự sinh mật khẩu tạm thời, lưu mã kích hoạt OTP vào cache (24h),
-    /// rồi gửi email chứa mật khẩu tạm + link kích hoạt để người dùng đặt mật khẩu mới.
+    /// Hệ thống tự sinh mật khẩu tạm thời, lưu OTP vào cache (24h),
+    /// rồi gửi email chứa link kích hoạt trỏ thẳng vào backend — người dùng chỉ cần click là xong.
     /// </summary>
     [HasPermission(Permissions.Users.Create)]
     [HttpPost]
     public async Task<ActionResult<object>> Create(CreateUserRequest request, CancellationToken ct)
     {
-        // Tạo user — handler luôn sinh mật khẩu ngẫu nhiên và trả về
         var result = await mediator.Send(
             new CreateUserCommand(request.Email, request.FullName, request.Roles ?? []), ct);
 
-        // Sinh mã xác nhận OTP 6 chữ số (crypto-safe)
-        var code = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
-        var normalizedEmail = request.Email.ToUpperInvariant();
-        var cacheKey = $"email_confirm:{normalizedEmail}";
-        cache.Set(cacheKey, code, TimeSpan.FromHours(24));
+        await SendConfirmationEmailAsync(request.Email, request.FullName, result.TempPassword);
 
-        // Lưu mật khẩu tạm thời vào cache — sẽ gửi sau khi user xác nhận email
+        return CreatedAtAction(nameof(List), new { id = result.Id }, new { id = result.Id });
+    }
+
+    /// <summary>
+    /// Admin gửi lại email xác nhận cho user chưa kích hoạt.
+    /// Sinh OTP mới, lưu vào cache và gửi lại link xác nhận 1-click.
+    /// </summary>
+    [HasPermission(Permissions.Users.Update)]
+    [HttpPost("{id:long}/send-confirmation-email")]
+    public async Task<IActionResult> SendConfirmationEmail(long id, CancellationToken ct)
+    {
+        var user = await db.Users.FirstOrDefaultAsync(u => u.Id == id, ct);
+        if (user is null)
+            return NotFound(new { message = "Không tìm thấy người dùng." });
+
+        if (user.EmailConfirmed)
+            return BadRequest(new { message = "Email của người dùng này đã được xác nhận. Không cần gửi lại." });
+
+        // Lấy mật khẩu tạm từ cache; nếu hết hạn thì sinh mới
+        var normalizedEmail = user.Email!.ToUpperInvariant();
         var pwCacheKey = $"temp_password:{normalizedEmail}";
-        cache.Set(pwCacheKey, result.TempPassword, TimeSpan.FromHours(24));
+        if (!cache.TryGetValue<string>(pwCacheKey, out var tempPassword) || string.IsNullOrEmpty(tempPassword))
+        {
+            tempPassword = Convert.ToBase64String(RandomNumberGenerator.GetBytes(12))
+                               .Replace("+", "!").Replace("/", "@")[..12] + "Aa1!";
+        }
 
-        // Tạo link xác nhận email trỏ về frontend
+        await SendConfirmationEmailAsync(user.Email!, user.FullName, tempPassword);
+
+        logger.LogInformation("Đã gửi lại email xác nhận cho user {Email} (ID={Id}).", user.Email, id);
+        return Ok(new { message = $"Email xác nhận đã được gửi lại tới {user.Email}." });
+    }
+
+    [HasPermission(Permissions.Users.AssignRole)]
+    [HttpPut("{id:long}/roles")]
+    public async Task<IActionResult> AssignRoles(long id, AssignRolesRequest request, CancellationToken ct)
+    {
+        await mediator.Send(new AssignRolesCommand(id, request.Roles), ct);
+        return NoContent();
+    }
+
+    [HasPermission(Permissions.Users.ResetPassword)]
+    [HttpPost("{id:long}/reset-password")]
+    public async Task<IActionResult> ResetPassword(long id, ResetPasswordRequest request, CancellationToken ct)
+    {
+        await mediator.Send(new ResetUserPasswordCommand(id, request.NewPassword), ct);
+        return NoContent();
+    }
+
+    [HasPermission(Permissions.Users.Update)]
+    [HttpPost("{id:long}/active")]
+    public async Task<IActionResult> SetActive(long id, SetActiveRequest request, CancellationToken ct)
+    {
+        await mediator.Send(new SetUserActiveCommand(id, request.IsActive), ct);
+        return NoContent();
+    }
+
+    // ── Helper ─────────────────────────────────────────────────────────────
+    // Sinh OTP, lưu cache, gửi email xác nhận 1-click trỏ vào backend
+    private async Task SendConfirmationEmailAsync(string email, string fullName, string tempPassword)
+    {
+        var code = RandomNumberGenerator.GetInt32(100000, 1000000).ToString();
+        var normalizedEmail = email.ToUpperInvariant();
+
+        cache.Set($"email_confirm:{normalizedEmail}", code, TimeSpan.FromHours(24));
+        cache.Set($"temp_password:{normalizedEmail}", tempPassword, TimeSpan.FromHours(24));
+
         var opts = emailOptions.Value;
         var confirmLink =
-            $"{opts.ClientUrl.TrimEnd('/')}/confirm-email" +
-            $"?email={Uri.EscapeDataString(request.Email)}&code={code}";
+            $"{opts.ApiUrl.TrimEnd('/')}/api/v1/admin/users/confirm-email" +
+            $"?email={Uri.EscapeDataString(email)}&code={code}";
 
-        // Gửi email xác nhận địa chỉ email (chưa có tài khoản/mật khẩu)
         var subject = "Xác nhận email - Chatbot Learning System";
         var body = $"""
             <div style="font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;max-width:600px;margin:0 auto;padding:20px;border:1px solid #e2e8f0;border-radius:8px;background:#ffffff;color:#1a202c;">
@@ -68,9 +126,9 @@ public sealed class UsersController(
                 </div>
 
                 <div style="line-height:1.7;font-size:15px;">
-                    <p>Xin chào <strong>{request.FullName}</strong>,</p>
+                    <p>Xin chào <strong>{fullName}</strong>,</p>
                     <p>Quản trị viên đã tạo tài khoản cho bạn trên hệ thống <strong>Chatbot Learning System</strong>.</p>
-                    <p>Để hoàn tất đăng ký, vui lòng xác nhận địa chỉ email của bạn bằng cách nhấn vào nút bên dưới:</p>
+                    <p>Để hoàn tất đăng ký, vui lòng nhấn vào nút bên dưới:</p>
 
                     <div style="text-align:center;margin:32px 0;">
                         <a href="{confirmLink}"
@@ -99,33 +157,7 @@ public sealed class UsersController(
             </div>
             """;
 
-        await emailService.SendEmailAsync(request.Email, subject, body);
-        logger.LogInformation("Đã gửi email xác nhận địa chỉ email tới {Email}.", request.Email);
-
-        return CreatedAtAction(nameof(List), new { id = result.Id }, new { id = result.Id });
-    }
-
-    [HasPermission(Permissions.Users.AssignRole)]
-    [HttpPut("{id:long}/roles")]
-    public async Task<IActionResult> AssignRoles(long id, AssignRolesRequest request, CancellationToken ct)
-    {
-        await mediator.Send(new AssignRolesCommand(id, request.Roles), ct);
-        return NoContent();
-    }
-
-    [HasPermission(Permissions.Users.ResetPassword)]
-    [HttpPost("{id:long}/reset-password")]
-    public async Task<IActionResult> ResetPassword(long id, ResetPasswordRequest request, CancellationToken ct)
-    {
-        await mediator.Send(new ResetUserPasswordCommand(id, request.NewPassword), ct);
-        return NoContent();
-    }
-
-    [HasPermission(Permissions.Users.Update)]
-    [HttpPost("{id:long}/active")]
-    public async Task<IActionResult> SetActive(long id, SetActiveRequest request, CancellationToken ct)
-    {
-        await mediator.Send(new SetUserActiveCommand(id, request.IsActive), ct);
-        return NoContent();
+        await emailService.SendEmailAsync(email, subject, body);
+        logger.LogInformation("Đã gửi email xác nhận tới {Email}.", email);
     }
 }

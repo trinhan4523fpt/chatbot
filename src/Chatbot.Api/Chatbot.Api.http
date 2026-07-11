@@ -1,6 +1,9 @@
 @Chatbot.Api_HostAddress = http://localhost:5024
 
-### Đăng nhập Admin lấy Access Token
+# ==============================================================
+# BƯỚC 1: Đăng nhập Admin lấy Access Token
+# ==============================================================
+### Đăng nhập Admin
 # @name login
 POST {{Chatbot.Api_HostAddress}}/api/v1/auth/login
 Content-Type: application/json
@@ -10,16 +13,52 @@ Content-Type: application/json
   "password": "Admin_Dev_P@ssw0rd1"
 }
 
-### Gửi mã xác nhận Gmail (Yêu cầu quyền Admin)
-# Thay đổi số '2' bằng ID của User cần kích hoạt
-POST {{Chatbot.Api_HostAddress}}/api/v1/admin/users/2/send-confirmation-email
-Authorization: Bearer {{login.response.body.accessToken}}
+###
 
-### Xác nhận mã OTP kích hoạt tài khoản (Không yêu cầu đăng nhập)
+# ==============================================================
+# BƯỚC 2: Tạo User mới (Admin tạo → hệ thống tự gửi email xác nhận)
+# Sau khi gọi xong, kiểm tra hộp thư của email bên dưới
+# để lấy mã OTP (hoặc link xác nhận)
+# ==============================================================
+### Tạo User mới
+# @name createUser
+POST {{Chatbot.Api_HostAddress}}/api/v1/admin/users
+Authorization: Bearer {{login.response.body.accessToken}}
+Content-Type: application/json
+
+{
+  "email": "testuser@gmail.com",
+  "fullName": "Test User",
+  "roles": ["Student"]
+}
+
+###
+
+# ==============================================================
+# BƯỚC 3: Xác nhận email bằng mã OTP nhận được trong email
+# Điền email và code từ email vào body bên dưới
+# Endpoint này KHÔNG yêu cầu đăng nhập
+# ==============================================================
+### Xác nhận email (confirm-email)
 POST {{Chatbot.Api_HostAddress}}/api/v1/admin/users/confirm-email
 Content-Type: application/json
 
 {
-  "email": "student@chatbot.local",
-  "code": "123456"
+  "email": "testuser@gmail.com",
+  "code": "ĐIỀN_MÃ_OTP_TỪ_EMAIL_VÀO_ĐÂY"
+}
+
+###
+
+# ==============================================================
+# KIỂM TRA: Đăng nhập bằng tài khoản vừa xác nhận
+# Mật khẩu tạm thời được gửi qua email sau khi xác nhận
+# ==============================================================
+### Đăng nhập tài khoản mới sau khi xác nhận
+POST {{Chatbot.Api_HostAddress}}/api/v1/auth/login
+Content-Type: application/json
+
+{
+  "email": "testuser@gmail.com",
+  "password": "ĐIỀN_MẬT_KHẨU_TẠM_THỜI_VÀO_ĐÂY"
 }
