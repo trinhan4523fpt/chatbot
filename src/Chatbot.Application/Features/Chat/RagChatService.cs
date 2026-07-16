@@ -16,13 +16,25 @@ public sealed class RagChatService(
     private const string ScopeMessage = "Tôi không tìm thấy thông tin này trong tài liệu.";
 
     private const string SystemInstruction =
-        "Bạn là trợ lý học tập. Chỉ trả lời dựa trên [NỘI DUNG THAM KHẢO] được cung cấp. " +
+        "Bạn là trợ lý học tập của một trường đại học Việt Nam. " +
+        "QUY TẮC NGÔN NGỮ (BẮT BUỘC, không có ngoại lệ): toàn bộ câu trả lời PHẢI viết 100% bằng tiếng Việt. " +
+        "TUYỆT ĐỐI KHÔNG được dùng tiếng Trung, chữ Hán, tiếng Anh hay bất kỳ ngôn ngữ nào khác. " +
+        "Không chèn chữ Hán vào giữa câu tiếng Việt. Nếu tài liệu tham khảo chứa ngôn ngữ khác, hãy dịch sang tiếng Việt. " +
+        "Chỉ trả lời dựa trên [NỘI DUNG THAM KHẢO] được cung cấp. " +
         "Nếu thông tin không có trong tài liệu, trả lời đúng câu: \"Tôi không tìm thấy thông tin này trong tài liệu.\" " +
-        "Trả lời bằng tiếng Việt, ngắn gọn, và trích dẫn nguồn dạng [Nguồn i].";
+        "Trả lời ngắn gọn và trích dẫn nguồn dạng [Nguồn i].";
+
+    private const string LanguageReminder =
+        "Nhắc lại: trả lời hoàn toàn bằng tiếng Việt, không dùng chữ Hán hay tiếng Trung.";
+
+    private const string RetryInstruction =
+        "Câu trả lời trên có chứa chữ Hán/tiếng Trung nên KHÔNG hợp lệ. " +
+        "Hãy viết lại toàn bộ câu trả lời, chỉ dùng tiếng Việt, tuyệt đối không có chữ Hán. " +
+        "Chỉ xuất ra câu trả lời đã sửa, không giải thích gì thêm.";
 
     public async Task<ChatAnswerResult> AnswerAsync(
         long sessionId, long userId, IReadOnlyCollection<string> roles, string question,
-        Func<string, Task> onToken, CancellationToken ct)
+        Func<string, Task> onToken, Func<Task> onReset, CancellationToken ct)
     {
         var session = await db.ChatSessions.FirstOrDefaultAsync(s => s.Id == sessionId, ct)
             ?? throw new NotFoundException("Không tìm thấy phiên chat.");
@@ -118,11 +130,19 @@ public sealed class RagChatService(
 
                 turns.Add(new ChatTurn("user", BuildPrompt(cfg.PromptTemplate, contextBuilder.ToString(), question)));
 
-                await foreach (var delta in chat.StreamAsync(turns, llmModel.Name, ct))
+                var answer = await StreamAnswerAsync(turns, llmModel.Name, onToken, ct);
+
+                // Qwen occasionally drifts into Chinese despite the instruction. Retry once with a
+                // corrective turn; the client clears the bad partial via onReset.
+                if (AnswerLanguagePolicy.ContainsChinese(answer))
                 {
-                    content.Append(delta);
-                    await onToken(delta);
+                    await onReset();
+                    turns.Add(new ChatTurn("assistant", answer));
+                    turns.Add(new ChatTurn("user", RetryInstruction));
+                    answer = await StreamAnswerAsync(turns, llmModel.Name, onToken, ct);
                 }
+
+                content.Append(answer);
             }
 
             stopwatch.Stop();
@@ -159,9 +179,23 @@ public sealed class RagChatService(
         }
     }
 
+    private async Task<string> StreamAnswerAsync(
+        List<ChatTurn> turns, string model, Func<string, Task> onToken, CancellationToken ct)
+    {
+        var buffer = new StringBuilder();
+        await foreach (var delta in chat.StreamAsync(turns, model, ct))
+        {
+            buffer.Append(delta);
+            await onToken(delta);
+        }
+
+        return buffer.ToString();
+    }
+
     private static string BuildPrompt(string? template, string context, string question)
     {
         template ??= "[NỘI DUNG THAM KHẢO]\n{context}\n\n[CÂU HỎI]\n{question}";
-        return template.Replace("{context}", context).Replace("{question}", question);
+        var prompt = template.Replace("{context}", context).Replace("{question}", question);
+        return prompt + "\n\n" + LanguageReminder;
     }
 }

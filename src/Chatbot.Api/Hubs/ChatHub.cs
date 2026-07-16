@@ -12,7 +12,12 @@ namespace Chatbot.Api.Hubs;
 [Authorize]
 public sealed class ChatHub(IRagChatService rag, SecurityStampService security) : Hub
 {
-    /// <summary>Streams a grounded answer: client receives ReceiveToken* then ReceiveComplete (or Error).</summary>
+    /// <summary>
+    /// Streams a grounded answer: client receives ReceiveToken* then ReceiveComplete (or Error).
+    /// A ReceiveReset may arrive mid-stream when the answer is regenerated (the model drifted out of
+    /// Vietnamese); on it, clients must discard the tokens received so far and render only what follows.
+    /// Clients that ignore ReceiveReset still end correct, as ReceiveComplete carries the final answer.
+    /// </summary>
     [HasPermission(Permissions.Chat.SendMessage)]
     public async Task SendMessage(long sessionId, string question)
     {
@@ -34,6 +39,7 @@ public sealed class ChatHub(IRagChatService rag, SecurityStampService security) 
             var result = await rag.AnswerAsync(
                 sessionId, userId, roles, question,
                 async delta => await Clients.Caller.SendAsync("ReceiveToken", delta, ct),
+                async () => await Clients.Caller.SendAsync("ReceiveReset", ct),
                 ct);
             await Clients.Caller.SendAsync("ReceiveComplete", result, ct);
         }

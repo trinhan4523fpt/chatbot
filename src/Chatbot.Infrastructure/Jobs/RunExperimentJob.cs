@@ -32,9 +32,16 @@ public sealed class RunExperimentJob(
     ILogger<RunExperimentJob> logger)
 {
     private const string SystemInstruction =
-        "Bạn là trợ lý học tập. Chỉ trả lời dựa trên [NỘI DUNG THAM KHẢO] được cung cấp. " +
+        "Bạn là trợ lý học tập của một trường đại học Việt Nam. " +
+        "QUY TẮC NGÔN NGỮ (BẮT BUỘC, không có ngoại lệ): toàn bộ câu trả lời PHẢI viết 100% bằng tiếng Việt. " +
+        "TUYỆT ĐỐI KHÔNG được dùng tiếng Trung, chữ Hán, tiếng Anh hay bất kỳ ngôn ngữ nào khác. " +
+        "Không chèn chữ Hán vào giữa câu tiếng Việt. Nếu tài liệu tham khảo chứa ngôn ngữ khác, hãy dịch sang tiếng Việt. " +
+        "Chỉ trả lời dựa trên [NỘI DUNG THAM KHẢO] được cung cấp. " +
         "Nếu thông tin không có trong tài liệu, trả lời đúng câu: \"Tôi không tìm thấy thông tin này trong tài liệu.\" " +
-        "Trả lời bằng tiếng Việt, ngắn gọn.";
+        "Trả lời ngắn gọn.";
+
+    private const string LanguageReminder =
+        "Nhắc lại: trả lời hoàn toàn bằng tiếng Việt, không dùng chữ Hán hay tiếng Trung.";
 
     [AutomaticRetry(Attempts = 2)]
     public async Task RunAsync(long experimentRunId, CancellationToken ct)
@@ -178,7 +185,8 @@ public sealed class RunExperimentJob(
 
         var prompt = (template ?? "[NỘI DUNG THAM KHẢO]\n{context}\n\n[CÂU HỎI]\n{question}")
             .Replace("{context}", contextBuilder.ToString())
-            .Replace("{question}", question);
+            .Replace("{question}", question)
+            + "\n\n" + LanguageReminder;
 
         var turns = new List<ChatTurn> { new("system", SystemInstruction), new("user", prompt) };
         var answer = new StringBuilder();

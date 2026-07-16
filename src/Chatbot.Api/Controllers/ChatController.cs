@@ -37,7 +37,8 @@ public sealed class ChatController(ISender mediator, IRagChatService rag, ICurre
     public async Task<ActionResult<ChatAnswerResult>> Send(long id, SendMessageRequest request, CancellationToken ct)
     {
         var result = await rag.AnswerAsync(
-            id, currentUser.UserId!.Value, currentUser.Roles, request.Content, _ => Task.CompletedTask, ct);
+            id, currentUser.UserId!.Value, currentUser.Roles, request.Content,
+            _ => Task.CompletedTask, () => Task.CompletedTask, ct);
         return Ok(result);
     }
 
