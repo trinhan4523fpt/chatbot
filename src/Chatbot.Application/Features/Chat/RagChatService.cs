@@ -15,6 +15,9 @@ public sealed class RagChatService(
 {
     private const string ScopeMessage = "Tôi không tìm thấy thông tin này trong tài liệu.";
 
+    /// <summary>Regeneration attempts allowed when the model answers with Chinese characters.</summary>
+    private const int MaxLanguageRetries = 3;
+
     private const string SystemInstruction =
         "Bạn là trợ lý học tập của một trường đại học Việt Nam. " +
         "QUY TẮC NGÔN NGỮ (BẮT BUỘC, không có ngoại lệ): toàn bộ câu trả lời PHẢI viết 100% bằng tiếng Việt. " +
@@ -132,14 +135,24 @@ public sealed class RagChatService(
 
                 var answer = await StreamAnswerAsync(turns, llmModel.Name, onToken, ct);
 
-                // Qwen occasionally drifts into Chinese despite the instruction. Retry once with a
-                // corrective turn; the client clears the bad partial via onReset.
-                if (AnswerLanguagePolicy.ContainsChinese(answer))
+                // Qwen drifts into Chinese despite the instruction, and a corrective retry can drift
+                // again, so keep regenerating while the answer is invalid. Each attempt replays the
+                // rejected text so the model sees what to avoid; the client clears the bad partial
+                // via onReset. Attempts are bounded, and a last resort strips the stray characters
+                // rather than let any Chinese reach the user.
+                for (var attempt = 0; attempt < MaxLanguageRetries && AnswerLanguagePolicy.ContainsChinese(answer); attempt++)
                 {
                     await onReset();
                     turns.Add(new ChatTurn("assistant", answer));
                     turns.Add(new ChatTurn("user", RetryInstruction));
                     answer = await StreamAnswerAsync(turns, llmModel.Name, onToken, ct);
+                }
+
+                if (AnswerLanguagePolicy.ContainsChinese(answer))
+                {
+                    answer = AnswerLanguagePolicy.StripChinese(answer);
+                    await onReset();
+                    await onToken(answer);
                 }
 
                 content.Append(answer);
