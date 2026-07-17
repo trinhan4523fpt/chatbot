@@ -486,8 +486,9 @@ $RECYCLE.BIN/
 .env
 *.env.local
 
-# Static-file storage root (uploaded documents, exports, finetune artifacts)
-/storage/
+# Static-file storage root (uploaded documents, exports, finetune artifacts).
+# Unanchored: the runtime root is src/Chatbot.Api/storage/, not the repo root.
+storage/
 
 # Python ML service artifacts
 ml/.venv/

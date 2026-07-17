@@ -109,18 +109,14 @@ public static class DependencyInjection
             });
         });
 
-        var corsOrigins = configuration.GetSection("Cors:AllowedOrigins").Get<string[]>() ?? [];
+        // Allow any origin, header and method. SetIsOriginAllowed(_ => true) reflects the
+        // caller's Origin back, so the policy can also allow credentials (which AllowAnyOrigin
+        // cannot be combined with per the CORS spec).
         services.AddCors(cors => cors.AddDefaultPolicy(policy =>
-        {
-            if (corsOrigins.Length > 0)
-            {
-                policy.WithOrigins(corsOrigins).AllowAnyHeader().AllowAnyMethod().AllowCredentials();
-            }
-            else
-            {
-                policy.AllowAnyOrigin().AllowAnyHeader().AllowAnyMethod();
-            }
-        }));
+            policy.SetIsOriginAllowed(_ => true)
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials()));
 
         return services;
     }

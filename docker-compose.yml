@@ -71,9 +71,11 @@ services:
     environment:
       OLLAMA_HOST: http://ollama:11434
     entrypoint: ["/bin/sh", "-c"]
-    # Primary Vietnamese-capable chat model + RAGAS judge. Fallback: llama3.1:8b.
+    # Chat model, then the benchmark judge. They are pulled separately because the judge only
+    # emits JSON scores and so does not need the chat model's Vietnamese fluency.
     command: >
-      "ollama pull ${OLLAMA_CHAT_MODEL:-qwen2.5:7b-instruct}"
+      "ollama pull ${OLLAMA_CHAT_MODEL:-gemma2:9b} &&
+       ollama pull ${OLLAMA_JUDGE_MODEL:-llama3.1:8b}"
     networks: [chatbot-net]
     restart: "no"
 
@@ -92,7 +94,7 @@ services:
       QDRANT_URL: http://qdrant:6333
       OLLAMA_URL: http://ollama:11434
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      RAGAS_JUDGE_MODEL: ${OLLAMA_CHAT_MODEL:-qwen2.5:7b-instruct}
+      RAGAS_JUDGE_MODEL: ${OLLAMA_JUDGE_MODEL:-llama3.1:8b}
       HF_HOME: /cache/hf
       # Mặc định chấm điểm bằng LLM-judge cục bộ (ổn định). Bỏ comment để dùng thư viện RAGAS
       # chính thức (cần pin phiên bản ragas/langchain tương thích) — xem README mục "Benchmark RBL & RAGAS".
