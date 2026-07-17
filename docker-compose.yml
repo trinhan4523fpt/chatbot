@@ -53,14 +53,16 @@ services:
       timeout: 10s
       retries: 5
       start_period: 20s
-    # Uncomment to use an NVIDIA GPU:
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
+    # Use the NVIDIA GPU when the host has one. Generation runs on CPU otherwise, which is
+    # several times slower (~30s vs ~5s per answer for a 9B model).
+    # No NVIDIA GPU on this host? Comment this block out; the stack then runs CPU-only.
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
 
   ollama-init:
     image: ollama/ollama:latest
