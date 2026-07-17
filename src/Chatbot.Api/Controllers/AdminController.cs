@@ -129,12 +129,7 @@ public sealed class AdminController(
                         <li>Không chia sẻ thông tin này với người khác.</li>
                     </ul>
 
-                    <div style="text-align:center;margin:28px 0 10px;">
-                        <a href="https://chatbot-api.viberp.vn/scalar/v1#tag/admin"
-                           style="display:inline-block;background:#2b6cb0;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:6px;font-size:15px;font-weight:bold;">
-                            👉 Đi tới Trang quản trị (API Docs)
-                        </a>
-                    </div>
+
                 </div>
 
                 <div style="margin-top:30px;padding-top:20px;border-top:1px solid #edf2f7;text-align:center;font-size:12px;color:#a0aec0;">
@@ -151,7 +146,7 @@ public sealed class AdminController(
 
         return Html("Xác nhận thành công", "#38a169", "🎉",
             "Email đã được xác nhận thành công!",
-            $"Xin chào <strong>{user.FullName}</strong>! Thông tin tài khoản và mật khẩu đăng nhập đã được gửi đến hộp thư <strong>{user.Email}</strong>. Vui lòng kiểm tra email.<br/><br/><div style='text-align:center;margin-top:20px;'><a href='https://chatbot-api.viberp.vn/scalar/v1#tag/admin' style='display:inline-block;background:#38a169;color:#ffffff;text-decoration:none;padding:12px 24px;border-radius:6px;font-weight:bold;font-size:15px;'>👉 Đi tới Trang quản trị (API Docs)</a></div>");
+            $"Xin chào <strong>{user.FullName}</strong>! Thông tin tài khoản và mật khẩu đăng nhập đã được gửi đến hộp thư <strong>{user.Email}</strong>. Vui lòng kiểm tra email.");
     }
 
     /// <summary>
@@ -209,12 +204,7 @@ public sealed class AdminController(
                         <p style="margin:0;"><strong>Mật khẩu tạm thời:</strong> <span style="font-family:monospace;color:#e53e3e;font-weight:bold;">{tempPassword}</span></p>
                     </div>
 
-                    <div style="text-align:center;margin:28px 0 10px;">
-                        <a href="https://chatbot-api.viberp.vn/scalar/v1#tag/admin"
-                           style="display:inline-block;background:#2b6cb0;color:#ffffff;text-decoration:none;padding:12px 28px;border-radius:6px;font-size:15px;font-weight:bold;">
-                            👉 Đi tới Trang quản trị (API Docs)
-                        </a>
-                    </div>
+
                 </div>
                 <div style="margin-top:30px;padding-top:20px;border-top:1px solid #edf2f7;text-align:center;font-size:12px;color:#a0aec0;">
                     <p>&copy; {DateTime.UtcNow.Year} Chatbot Learning System. All rights reserved.</p>
