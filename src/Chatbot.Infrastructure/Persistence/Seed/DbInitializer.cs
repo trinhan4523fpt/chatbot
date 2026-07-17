@@ -136,10 +136,14 @@ public sealed class DbInitializer(
         await EnsureAsync(db.EmbeddingModels, m => m.Name == "text-embedding-3-small",
             () => new EmbeddingModel { Name = "text-embedding-3-small", Provider = "openai", Dimension = 1536, IsFree = false, MaxInputTokens = 8191, QdrantCollectionName = "emb_openai_3_small", Description = "OpenAI (benchmark only; requires API key)" }, ct);
 
+        await EnsureAsync(db.LlmModels, m => m.Name == "gemma2:9b",
+            () => new LlmModel { Name = "gemma2:9b", Type = LlmModelType.Base, Provider = "ollama", BaseModel = "gemma2:9b", Description = "Local Vietnamese-capable base model (RAG generation)" }, ct);
+        await EnsureAsync(db.LlmModels, m => m.Name == "llama3.1:8b",
+            () => new LlmModel { Name = "llama3.1:8b", Type = LlmModelType.Base, Provider = "ollama", BaseModel = "llama3.1:8b", IsActive = false, Description = "Benchmark judge (emits JSON scores, not user-facing prose)" }, ct);
         await EnsureAsync(db.LlmModels, m => m.Name == "qwen2.5:7b-instruct",
-            () => new LlmModel { Name = "qwen2.5:7b-instruct", Type = LlmModelType.Base, Provider = "ollama", BaseModel = "qwen2.5:7b-instruct", Description = "Local Vietnamese-capable base model (RAG generation)" }, ct);
+            () => new LlmModel { Name = "qwen2.5:7b-instruct", Type = LlmModelType.Base, Provider = "ollama", BaseModel = "qwen2.5:7b-instruct", IsActive = false, Description = "Superseded by gemma2: drifted from Vietnamese into Chinese" }, ct);
         await EnsureAsync(db.LlmModels, m => m.Name == "chatbot-ft-v1",
-            () => new LlmModel { Name = "chatbot-ft-v1", Type = LlmModelType.FineTuned, Provider = "ollama", BaseModel = "qwen2.5:7b-instruct", IsActive = false, Description = "Fine-tuned model placeholder (populated after fine-tuning)" }, ct);
+            () => new LlmModel { Name = "chatbot-ft-v1", Type = LlmModelType.FineTuned, Provider = "ollama", BaseModel = "gemma2:9b", IsActive = false, Description = "Fine-tuned model placeholder (populated after fine-tuning)" }, ct);
 
         await db.SaveChangesAsync(ct);
     }
@@ -176,7 +180,7 @@ public sealed class DbInitializer(
 
         var embedding = await db.EmbeddingModels.FirstAsync(m => m.Name == "multilingual-e5-base", ct);
         var strategy = await db.ChunkingStrategies.FirstAsync(s => s.Name == "fixed-512-50", ct);
-        var llm = await db.LlmModels.FirstAsync(m => m.Name == "qwen2.5:7b-instruct", ct);
+        var llm = await db.LlmModels.FirstAsync(m => m.Name == "gemma2:9b", ct);
 
         db.SystemConfigurations.Add(new SystemConfiguration
         {
