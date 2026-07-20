@@ -1,6 +1,14 @@
-# Sơ đồ cơ sở dữ liệu (ERD)
+# Sơ đồ cơ sở dữ liệu
 
-**File draw.io:** [ChatbotDb.drawio](ChatbotDb.drawio) — mở bằng [draw.io](https://app.diagrams.net) hoặc extension *Draw.io Integration* trong VS Code.
+Có **2 sơ đồ**, mỗi cái gồm **ảnh PNG** (xem ngay) và **file draw.io** (sửa được).
+
+| Sơ đồ | Ảnh | File draw.io | Dùng khi nào |
+|---|---|---|---|
+| **1. ERD** (khái niệm) | [ERD.png](ERD.png) | [ERD.drawio](ERD.drawio) | Trình bày, báo cáo — gọn, dễ nhìn |
+| **2. Database Diagram** (vật lý) | [DatabaseDiagram.png](DatabaseDiagram.png) | [ChatbotDb.drawio](ChatbotDb.drawio) | Tra cứu khi code — đầy đủ cột, quy tắc xoá |
+
+> Mở file `.drawio` bằng [draw.io](https://app.diagrams.net) hoặc extension
+> *Draw.io Integration* trong VS Code (sửa trực tiếp trong IDE).
 
 **31 bảng · 42 khoá ngoại · 4 schema** — sinh từ metadata thật của database, đã đối chiếu khớp 100%
 (bỏ `__EFMigrationsHistory` và `hangfire.*` vì là bảng hệ thống).
@@ -14,7 +22,29 @@
 
 ---
 
-## Tổng quan quan hệ
+## Sơ đồ 1 — ERD (khái niệm)
+
+Tập trung vào **thực thể và quan hệ**, chỉ liệt kê thuộc tính chính. Phù hợp để trình bày.
+
+![ERD](ERD.png)
+
+*File sửa được: [ERD.drawio](ERD.drawio) — 26 thực thể, 34 quan hệ*
+
+---
+
+## Sơ đồ 2 — Database Diagram (vật lý)
+
+**Đầy đủ 352 cột kèm kiểu dữ liệu thật** (`nvarchar(300)`, `decimal(7,6)`, `datetime2`...),
+đánh dấu PK/FK, ký hiệu quan hệ crow's foot. Ảnh lớn — mở riêng để phóng to.
+
+![Database Diagram](DatabaseDiagram.png)
+
+*File sửa được: [ChatbotDb.drawio](ChatbotDb.drawio) — 31 bảng, 42 khoá ngoại, có thêm quy tắc xoá
+(Cascade / Restrict / SetNull) trên từng mũi tên*
+
+---
+
+## Tổng quan quan hệ (Mermaid)
 
 ```mermaid
 erDiagram
@@ -155,3 +185,16 @@ nên không vẽ.
 
 **Nguồn dữ liệu:** entity tại [src/Chatbot.Domain/Entities/](../src/Chatbot.Domain/Entities/),
 ánh xạ bảng tại [src/Chatbot.Infrastructure/Persistence/Configurations/](../src/Chatbot.Infrastructure/Persistence/Configurations/).
+
+---
+
+## Sửa lại sơ đồ
+
+Ảnh PNG được render từ mã Mermaid, file `.drawio` sinh bằng script từ metadata database.
+Nếu schema đổi (thêm bảng, thêm cột), cách cập nhật:
+
+1. **Sửa nhanh:** mở `.drawio`, kéo thả trực tiếp rồi *File → Export as → PNG* đè lên ảnh cũ.
+2. **Sinh lại từ đầu:** chạy lại script sinh — đọc `INFORMATION_SCHEMA` và `sys.foreign_keys`
+   nên luôn khớp database thật.
+
+Khi thêm migration đổi schema, nhớ cập nhật cả 2 sơ đồ để tài liệu không lệch với code.
