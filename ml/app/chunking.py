@@ -33,6 +33,8 @@ def chunk_pages(pages: list[ParsedPage], chunk_size: int, chunk_overlap: int, st
         strategy = "sliding"
     elif "sentence" in strategy_lower:
         strategy = "sentence"
+    elif "char" in strategy_lower:
+        strategy = "char"
     else:
         strategy = "fixed"
 
@@ -101,6 +103,23 @@ def chunk_pages(pages: list[ParsedPage], chunk_size: int, chunk_overlap: int, st
                     break
                 pos += step
         # apply overlap for consistency with other strategies
+        return chunks
+
+    if strategy == "char":
+        # Chia thuần theo số ký tự, chunk_size được hiểu trực tiếp là số ký tự (không quy đổi token).
+        char_size = max(1, chunk_size)
+        char_step = max(1, chunk_size - max(0, chunk_overlap))
+        for page in pages:
+            text = (page.text or "").strip()
+            if not text:
+                continue
+            pos = 0
+            while pos < len(text):
+                piece = text[pos: pos + char_size]
+                _append(piece, page.page)
+                if pos + char_size >= len(text):
+                    break
+                pos += char_step
         return chunks
 
     if strategy == "sentence":

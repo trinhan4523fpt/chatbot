@@ -16,9 +16,9 @@ class ParseResponse(BaseModel):
 
 class ChunkRequest(BaseModel):
     pages: list[ParsedPage]
-    strategy: str = "fixed-512-50"
-    chunk_size: int = 512
-    chunk_overlap: int = 50
+    strategy: str = "char"
+    chunk_size: int = 500
+    chunk_overlap: int = 0
 
 
 class Chunk(BaseModel):
