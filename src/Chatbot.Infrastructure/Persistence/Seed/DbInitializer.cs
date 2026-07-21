@@ -126,6 +126,8 @@ public sealed class DbInitializer(
             () => new ChunkingStrategy { Name = "recursive-512-50", ChunkSize = 512, ChunkOverlap = 50, Description = "Recursive character text splitter" }, ct);
         await EnsureAsync(db.ChunkingStrategies, s => s.Name == "sentence-based",
             () => new ChunkingStrategy { Name = "sentence-based", Description = "Sentence-based splitting" }, ct);
+        await EnsureAsync(db.ChunkingStrategies, s => s.Name == "char-500",
+            () => new ChunkingStrategy { Name = "char-500", ChunkSize = 500, ChunkOverlap = 0, Description = "Pure character-based: 500 chars per chunk, no token conversion" }, ct);
 
         await EnsureAsync(db.EmbeddingModels, m => m.Name == "multilingual-e5-base",
             () => new EmbeddingModel { Name = "multilingual-e5-base", Provider = "huggingface", Dimension = 768, IsFree = true, MaxInputTokens = 512, QdrantCollectionName = "emb_multilingual_e5_base", Description = "intfloat/multilingual-e5-base" }, ct);
@@ -173,20 +175,25 @@ public sealed class DbInitializer(
 
     private async Task SeedSystemConfigurationAsync(CancellationToken ct)
     {
-        if (await db.SystemConfigurations.AnyAsync(c => c.Id == 1, ct))
+        var charStrategy = await db.ChunkingStrategies.FirstAsync(s => s.Name == "char-500", ct);
+
+        var existing = await db.SystemConfigurations.FindAsync([1], ct);
+        if (existing is not null)
         {
+            // Cập nhật active chunking strategy sang char-500 nếu đang dùng strategy cũ
+            existing.ActiveChunkingStrategyId = charStrategy.Id;
+            await db.SaveChangesAsync(ct);
             return;
         }
 
         var embedding = await db.EmbeddingModels.FirstAsync(m => m.Name == "multilingual-e5-base", ct);
-        var strategy = await db.ChunkingStrategies.FirstAsync(s => s.Name == "fixed-512-50", ct);
         var llm = await db.LlmModels.FirstAsync(m => m.Name == "gemma2:9b", ct);
 
         db.SystemConfigurations.Add(new SystemConfiguration
         {
             Id = 1,
             ActiveEmbeddingModelId = embedding.Id,
-            ActiveChunkingStrategyId = strategy.Id,
+            ActiveChunkingStrategyId = charStrategy.Id,
             ActiveLlmModelId = llm.Id,
             PromptTemplate = DefaultPromptTemplate,
         });
