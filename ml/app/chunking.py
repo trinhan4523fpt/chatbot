@@ -21,6 +21,8 @@ def chunk_pages(pages: list[ParsedPage], chunk_size: int, chunk_overlap: int, st
     - "fixed": uses RecursiveCharacterTextSplitter (character-based with separators).
     - "paragraph": split by blank lines / newlines (no overlap).
     - "sliding": simple fixed-size sliding window over characters with overlap.
+    - "sentence": group sentences into chunks by token budget.
+    - "semantic[:model_key]": semantic similarity-based chunking.
     """
     strategy_lower = (strategy or "fixed").lower()
     if "semantic-paragraph" in strategy_lower:
@@ -54,6 +56,7 @@ def chunk_pages(pages: list[ParsedPage], chunk_size: int, chunk_overlap: int, st
             token_count=max(1, len(piece) // _CHARS_PER_TOKEN),
         ))
         index += 1
+
 
     if strategy == "fixed":
         # keep existing behavior using langchain splitter
