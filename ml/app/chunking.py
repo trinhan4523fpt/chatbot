@@ -9,9 +9,19 @@ from __future__ import annotations
 from .schemas import Chunk, ParsedPage
 import re
 import time
-from typing import Tuple
 
 _CHARS_PER_TOKEN = 4
+
+
+def _split_sentences(text: str) -> list[str]:
+    """Split into sentences: underthesea (Vietnamese) first, then a punctuation-based fallback."""
+    try:
+        from underthesea import sent_tokenize
+
+        sentences = sent_tokenize(text)
+    except Exception:
+        sentences = re.split(r"(?<=[.!?])\s+", text)
+    return [s.strip() for s in sentences if s.strip()]
 
 
 def chunk_pages(pages: list[ParsedPage], chunk_size: int, chunk_overlap: int, strategy: str = "fixed") -> list[Chunk]:
@@ -104,8 +114,7 @@ def chunk_pages(pages: list[ParsedPage], chunk_size: int, chunk_overlap: int, st
                 _append(piece, page.page)
                 if pos + win >= len(text):
                     break
-                pos += step
-        # apply overlap for consistency with other strategies
+                pos += step  # step = win - overlap, so consecutive windows overlap
         return chunks
 
     if strategy == "char":
@@ -131,34 +140,12 @@ def chunk_pages(pages: list[ParsedPage], chunk_size: int, chunk_overlap: int, st
             text = text.strip()
             if not text:
                 continue
-            sentences = []
-            # prefer underthesea for Vietnamese if available
-            try:
-                from underthesea import sent_tokenize
+            sentences = _split_sentences(text)
+            if not sentences:
+                continue
 
-                sentences = sent_tokenize(text)
-            except Exception:
-                try:
-                    import nltk
-
-                    nltk.data.find("tokenizers/punkt")
-                except Exception:
-                    try:
-                        import nltk
-
-                        nltk.download("punkt")
-                    except Exception:
-                        pass
-                try:
-                    from nltk.tokenize import sent_tokenize as _nltk_sent
-
-                    sentences = _nltk_sent(text)
-                except Exception:
-                    # fallback simple regex split
-                    sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
-
-            # group sentences into chunks by token budget
-            cur = []
+            # Group sentences into chunks up to the token budget, keeping sentences whole.
+            cur: list[str] = []
             cur_tokens = 0
             for s in sentences:
                 tokens = max(1, len(s) // _CHARS_PER_TOKEN)
@@ -172,7 +159,6 @@ def chunk_pages(pages: list[ParsedPage], chunk_size: int, chunk_overlap: int, st
             if cur:
                 _append(" ".join(cur), page.page)
 
-        # apply overlap by characters
         if chunk_overlap > 0:
             return _apply_overlap(chunks, chunk_overlap)
         return chunks
@@ -190,14 +176,7 @@ def chunk_pages(pages: list[ParsedPage], chunk_size: int, chunk_overlap: int, st
             if not text:
                 continue
 
-            # build sentences
-            try:
-                from underthesea import sent_tokenize
-
-                sentences = sent_tokenize(text)
-            except Exception:
-                sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+", text) if s.strip()]
-
+            sentences = _split_sentences(text)
             if not sentences:
                 continue
 
