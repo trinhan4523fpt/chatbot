@@ -30,4 +30,6 @@ public sealed record UpdateSystemConfigurationRequest(
     bool? ScopeRestriction,
     string? PromptTemplate,
     int? HistoryWindowTurns,
+    decimal? Temperature,
+    int? MaxOutputTokens,
     bool ReindexNow = false);

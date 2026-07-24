@@ -18,12 +18,18 @@ public sealed class OllamaChatCompletionService : IChatCompletionService
     }
 
     public async IAsyncEnumerable<string> StreamAsync(
-        IReadOnlyList<ChatTurn> messages, string model, [EnumeratorCancellation] CancellationToken ct = default)
+        IReadOnlyList<ChatTurn> messages, string model, ChatSamplingOptions? sampling = null,
+        [EnumeratorCancellation] CancellationToken ct = default)
     {
         var chatMessages = messages
             .Select(m => new ChatMessage(MapRole(m.Role), m.Content))
             .ToList();
-        var options = new ChatOptions { ModelId = model, Temperature = 0.2f };
+        var options = new ChatOptions
+        {
+            ModelId = model,
+            Temperature = sampling?.Temperature ?? 0.2f,
+            MaxOutputTokens = sampling?.MaxOutputTokens,
+        };
 
         await foreach (var update in _client.GetStreamingResponseAsync(chatMessages, options, ct))
         {

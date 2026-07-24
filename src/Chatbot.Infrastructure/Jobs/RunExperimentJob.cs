@@ -190,7 +190,8 @@ public sealed class RunExperimentJob(
 
         var turns = new List<ChatTurn> { new("system", SystemInstruction), new("user", prompt) };
         var answer = new StringBuilder();
-        await foreach (var delta in chat.StreamAsync(turns, llmModel, ct))
+        // Benchmarks use the model's default sampling so runs stay comparable.
+        await foreach (var delta in chat.StreamAsync(turns, llmModel, options: null, ct))
         {
             answer.Append(delta);
         }

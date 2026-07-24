@@ -23,6 +23,8 @@ public sealed record SystemConfigurationDto(
     bool ScopeRestriction,
     string? PromptTemplate,
     int HistoryWindowTurns,
+    decimal Temperature,
+    int? MaxOutputTokens,
     long MaxUploadBytes,
     CorpusStatusDto Corpus);
 
@@ -61,7 +63,8 @@ public sealed class GetSystemConfigurationQueryHandler(IAppDbContext db)
             cfg.ActiveChunkingStrategyId, strategy?.Name,
             cfg.ActiveLlmModelId, llm?.Name,
             cfg.RetrievalTopK, cfg.MinRelevanceScore, cfg.ScopeRestriction,
-            cfg.PromptTemplate, cfg.HistoryWindowTurns, cfg.MaxUploadBytes,
+            cfg.PromptTemplate, cfg.HistoryWindowTurns,
+            cfg.Temperature, cfg.MaxOutputTokens, cfg.MaxUploadBytes,
             corpus);
     }
 }
@@ -120,6 +123,8 @@ public sealed class GetConfigOptionsQueryHandler(IAppDbContext db)
             new("retrievalTopK", 1, 50, cfg.RetrievalTopK),
             new("minRelevanceScore", 0m, 1m, cfg.MinRelevanceScore),
             new("historyWindowTurns", 0, 50, cfg.HistoryWindowTurns),
+            new("temperature", 0m, 2m, cfg.Temperature),
+            new("maxOutputTokens", 1, 8192, cfg.MaxOutputTokens ?? 0),
         };
 
         var corpus = await CorpusStatus.ComputeAsync(
@@ -127,6 +132,78 @@ public sealed class GetConfigOptionsQueryHandler(IAppDbContext db)
 
         return new ConfigOptionsDto(embeddings, strategies, llms, ranges, corpus);
     }
+}
+
+// ---- UI schema -----------------------------------------------------------------
+
+/// <summary>
+/// Describes the settings UI as tabs of fields, so the frontend can render a Dify-style config
+/// screen without hardcoding it. Only fields the backend actually honours are listed; planned
+/// features (hybrid search, reranker, cache...) are intentionally absent, not shown as disabled.
+/// </summary>
+public sealed record ConfigSchemaDto(IReadOnlyList<ConfigTabDto> Tabs);
+
+/// <summary>A tab in the settings UI. <paramref name="Advanced"/> tabs can be collapsed by default.</summary>
+public sealed record ConfigTabDto(string Key, string Title, bool Advanced, IReadOnlyList<ConfigFieldDto> Fields);
+
+/// <summary>
+/// One editable field. <paramref name="Type"/> drives the control (number/decimal/bool/text/select);
+/// <paramref name="Min"/>/<paramref name="Max"/> bound numbers; <paramref name="RequiresReindex"/>
+/// flags a change that makes the corpus stale.
+/// </summary>
+public sealed record ConfigFieldDto(
+    string Key,
+    string Label,
+    string Type,
+    string? Help,
+    decimal? Min,
+    decimal? Max,
+    bool RequiresReindex);
+
+public sealed record GetConfigSchemaQuery : IRequest<ConfigSchemaDto>;
+
+public sealed class GetConfigSchemaQueryHandler : IRequestHandler<GetConfigSchemaQuery, ConfigSchemaDto>
+{
+    // Static: the shape of the settings screen does not depend on data, only the current values do
+    // (those come from GET /config and /config/options).
+    private static readonly ConfigSchemaDto Schema = new(new[]
+    {
+        new ConfigTabDto("knowledge", "Tài liệu & Chunking", false, new[]
+        {
+            new ConfigFieldDto("activeChunkingStrategyId", "Chiến lược chunking", "select",
+                "Cách cắt tài liệu thành đoạn. Đổi sẽ cần index lại.", null, null, true),
+        }),
+        new ConfigTabDto("embedding", "Embedding", false, new[]
+        {
+            new ConfigFieldDto("activeEmbeddingModelId", "Embedding model", "select",
+                "Model vector hoá. Đổi sẽ cần index lại (số chiều khác nhau).", null, null, true),
+        }),
+        new ConfigTabDto("retrieval", "Truy hồi", false, new[]
+        {
+            new ConfigFieldDto("retrievalTopK", "Số đoạn lấy về (Top K)", "number",
+                "Lấy bao nhiêu đoạn gần nhất cho mỗi câu hỏi.", 1, 50, false),
+            new ConfigFieldDto("minRelevanceScore", "Ngưỡng liên quan", "decimal",
+                "Bỏ đoạn có điểm thấp hơn ngưỡng này (0–1).", 0m, 1m, false),
+            new ConfigFieldDto("scopeRestriction", "Chỉ trả lời trong tài liệu", "bool",
+                "Bật: không có đoạn nào vượt ngưỡng thì từ chối trả lời.", null, null, false),
+        }),
+        new ConfigTabDto("generation", "Sinh câu trả lời", false, new[]
+        {
+            new ConfigFieldDto("activeLlmModelId", "Mô hình LLM", "select",
+                "Model sinh câu trả lời. Đổi không cần index lại.", null, null, false),
+            new ConfigFieldDto("temperature", "Temperature", "decimal",
+                "0 = ổn định, cao = sáng tạo hơn (0–2).", 0m, 2m, false),
+            new ConfigFieldDto("maxOutputTokens", "Độ dài tối đa", "number",
+                "Số token tối đa mỗi câu trả lời. Bỏ trống = mặc định model.", 1, 8192, false),
+            new ConfigFieldDto("historyWindowTurns", "Số lượt hội thoại nhớ", "number",
+                "Số lượt hỏi-đáp gần nhất đưa vào ngữ cảnh (0–50).", 0, 50, false),
+            new ConfigFieldDto("promptTemplate", "Mẫu prompt", "text",
+                "Phải chứa {context} và {question}.", null, null, false),
+        }),
+    });
+
+    public Task<ConfigSchemaDto> Handle(GetConfigSchemaQuery request, CancellationToken ct) =>
+        Task.FromResult(Schema);
 }
 
 // ---- Update --------------------------------------------------------------------
@@ -144,6 +221,8 @@ public sealed record UpdateSystemConfigurationCommand(
     bool? ScopeRestriction,
     string? PromptTemplate,
     int? HistoryWindowTurns,
+    decimal? Temperature,
+    int? MaxOutputTokens,
     bool ReindexNow) : IRequest<UpdateSystemConfigurationResult>;
 
 /// <summary>
@@ -165,6 +244,8 @@ public sealed class UpdateSystemConfigurationCommandValidator : AbstractValidato
         RuleFor(x => x.RetrievalTopK).InclusiveBetween(1, 50).When(x => x.RetrievalTopK.HasValue);
         RuleFor(x => x.MinRelevanceScore).InclusiveBetween(0m, 1m).When(x => x.MinRelevanceScore.HasValue);
         RuleFor(x => x.HistoryWindowTurns).InclusiveBetween(0, 50).When(x => x.HistoryWindowTurns.HasValue);
+        RuleFor(x => x.Temperature).InclusiveBetween(0m, 2m).When(x => x.Temperature.HasValue);
+        RuleFor(x => x.MaxOutputTokens).InclusiveBetween(1, 8192).When(x => x.MaxOutputTokens.HasValue);
         RuleFor(x => x.PromptTemplate)
             .Must(t => t!.Contains("{context}") && t.Contains("{question}"))
             .WithMessage("PromptTemplate phải chứa cả {context} và {question}.")
@@ -239,6 +320,16 @@ public sealed class UpdateSystemConfigurationCommandHandler(
         if (request.HistoryWindowTurns is { } history)
         {
             cfg.HistoryWindowTurns = history;
+        }
+
+        if (request.Temperature is { } temperature)
+        {
+            cfg.Temperature = temperature;
+        }
+
+        if (request.MaxOutputTokens is { } maxTokens)
+        {
+            cfg.MaxOutputTokens = maxTokens;
         }
 
         if (!string.IsNullOrWhiteSpace(request.PromptTemplate))

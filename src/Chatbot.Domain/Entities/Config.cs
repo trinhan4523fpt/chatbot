@@ -52,6 +52,12 @@ public class SystemConfiguration : AuditableEntity
     public bool ScopeRestriction { get; set; } = true;
     public string? PromptTemplate { get; set; }
 
+    /// <summary>LLM sampling temperature (0 = deterministic, higher = more creative).</summary>
+    public decimal Temperature { get; set; } = 0.2m;
+
+    /// <summary>Max tokens the LLM may generate per answer. Null = model default.</summary>
+    public int? MaxOutputTokens { get; set; }
+
     public long MaxUploadBytes { get; set; } = 50L * 1024 * 1024;
     public int HistoryWindowTurns { get; set; } = 10;
 

@@ -133,7 +133,8 @@ public sealed class RagChatService(
 
                 turns.Add(new ChatTurn("user", BuildPrompt(cfg.PromptTemplate, contextBuilder.ToString(), question)));
 
-                var answer = await StreamAnswerAsync(turns, llmModel.Name, onToken, ct);
+                var sampling = new ChatSamplingOptions((float)cfg.Temperature, cfg.MaxOutputTokens);
+                var answer = await StreamAnswerAsync(turns, llmModel.Name, sampling, onToken, ct);
 
                 // Qwen drifts into Chinese despite the instruction, and a corrective retry can drift
                 // again, so keep regenerating while the answer is invalid. Each attempt replays the
@@ -145,7 +146,7 @@ public sealed class RagChatService(
                     await onReset();
                     turns.Add(new ChatTurn("assistant", answer));
                     turns.Add(new ChatTurn("user", RetryInstruction));
-                    answer = await StreamAnswerAsync(turns, llmModel.Name, onToken, ct);
+                    answer = await StreamAnswerAsync(turns, llmModel.Name, sampling, onToken, ct);
                 }
 
                 if (AnswerLanguagePolicy.ContainsChinese(answer))
@@ -193,10 +194,11 @@ public sealed class RagChatService(
     }
 
     private async Task<string> StreamAnswerAsync(
-        List<ChatTurn> turns, string model, Func<string, Task> onToken, CancellationToken ct)
+        List<ChatTurn> turns, string model, ChatSamplingOptions sampling, Func<string, Task> onToken,
+        CancellationToken ct)
     {
         var buffer = new StringBuilder();
-        await foreach (var delta in chat.StreamAsync(turns, model, ct))
+        await foreach (var delta in chat.StreamAsync(turns, model, sampling, ct))
         {
             buffer.Append(delta);
             await onToken(delta);
