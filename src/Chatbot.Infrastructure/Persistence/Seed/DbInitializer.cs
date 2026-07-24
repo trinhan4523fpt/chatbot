@@ -127,7 +127,7 @@ public sealed class DbInitializer(
         await EnsureAsync(db.ChunkingStrategies, s => s.Name == "sentence-based",
             () => new ChunkingStrategy { Name = "sentence-based", Description = "Sentence-based splitting" }, ct);
         await EnsureAsync(db.ChunkingStrategies, s => s.Name == "char-500",
-            () => new ChunkingStrategy { Name = "char-500", ChunkSize = 500, ChunkOverlap = 0, Description = "Pure character-based: 500 chars per chunk, no token conversion" }, ct);
+            () => new ChunkingStrategy { Name = "char-500", ChunkSize = 500, ChunkOverlap = 48, Description = "Pure character-based: 500 chars per chunk, 48 chars overlap (no token conversion)" }, ct);
 
         await EnsureAsync(db.EmbeddingModels, m => m.Name == "multilingual-e5-base",
             () => new EmbeddingModel { Name = "multilingual-e5-base", Provider = "huggingface", Dimension = 768, IsFree = true, MaxInputTokens = 512, QdrantCollectionName = "emb_multilingual_e5_base", Description = "intfloat/multilingual-e5-base" }, ct);
