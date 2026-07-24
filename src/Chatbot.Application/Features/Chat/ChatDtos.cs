@@ -6,7 +6,7 @@ public sealed record ChatSessionDto(
     long Id, long SubjectId, string? Title, DateTime CreatedAtUtc, DateTime? UpdatedAtUtc);
 
 public sealed record ChatCitationDto(
-    long? ChunkId, long? DocumentId, string? DocumentTitle, decimal? Score, string? Snippet);
+    long? ChunkId, long? DocumentId, string? DocumentTitle, decimal? Score, string? Snippet, int? PageNumber);
 
 public sealed record ChatMessageDto(
     long Id, ChatRole Role, string Content, ChatMessageStatus Status, int? LatencyMs,

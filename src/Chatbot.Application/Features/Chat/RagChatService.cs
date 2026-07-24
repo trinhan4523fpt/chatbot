@@ -105,7 +105,7 @@ public sealed class RagChatService(
                 var chunkIds = relevant.Select(h => h.ChunkId).ToList();
                 var chunks = await db.DocumentChunks.AsNoTracking()
                     .Where(c => chunkIds.Contains(c.Id))
-                    .Select(c => new { c.Id, c.Content, c.DocumentId, Title = c.Document.Title })
+                    .Select(c => new { c.Id, c.Content, c.DocumentId, c.PageNumber, Title = c.Document.Title })
                     .ToListAsync(ct);
                 var byId = chunks.ToDictionary(x => x.Id);
 
@@ -121,7 +121,8 @@ public sealed class RagChatService(
                     contextBuilder.AppendLine($"[Nguồn {index}] {chunk.Content}");
                     var snippet = chunk.Content.Length > 300 ? chunk.Content[..300] : chunk.Content;
                     citations.Add(new ChatCitationDto(
-                        chunk.Id, chunk.DocumentId, chunk.Title, (decimal)Math.Round(hit.Score, 6), snippet));
+                        chunk.Id, chunk.DocumentId, chunk.Title, (decimal)Math.Round(hit.Score, 6),
+                        snippet, chunk.PageNumber));
                     index++;
                 }
 
@@ -169,6 +170,7 @@ public sealed class RagChatService(
                 {
                     MessageId = assistant.Id, ChunkId = c.ChunkId, DocumentId = c.DocumentId,
                     DocumentTitle = c.DocumentTitle, RelevanceScore = c.Score, Snippet = c.Snippet,
+                    PageNumber = c.PageNumber,
                 });
             }
 

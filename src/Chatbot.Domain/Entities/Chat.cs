@@ -50,5 +50,8 @@ public class MessageCitation : CreatedEntity
     public decimal? RelevanceScore { get; set; }
     public string? Snippet { get; set; }
 
+    /// <summary>Page the cited chunk came from, so the UI can show "trang 5". Null if unknown.</summary>
+    public int? PageNumber { get; set; }
+
     public ChatMessage Message { get; set; } = null!;
 }

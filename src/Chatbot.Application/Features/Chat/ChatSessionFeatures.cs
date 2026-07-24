@@ -80,7 +80,7 @@ public sealed class GetChatMessagesQueryHandler(IAppDbContext db, ICurrentUser c
             .Select(m => new ChatMessageDto(
                 m.Id, m.Role, m.Content, m.Status, m.LatencyMs, m.CreatedAtUtc,
                 m.Citations.Select(c => new ChatCitationDto(
-                    c.ChunkId, c.DocumentId, c.DocumentTitle, c.RelevanceScore, c.Snippet)).ToList()))
+                    c.ChunkId, c.DocumentId, c.DocumentTitle, c.RelevanceScore, c.Snippet, c.PageNumber)).ToList()))
             .ToListAsync(ct);
     }
 }
