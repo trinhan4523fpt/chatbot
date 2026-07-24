@@ -24,6 +24,8 @@ public sealed record ConfirmEmailRequest(string Email, string Code);
 public sealed record UpdateSystemConfigurationRequest(
     long? ActiveEmbeddingModelId,
     long? ActiveChunkingStrategyId,
+    int? ActiveChunkSize,
+    int? ActiveChunkOverlap,
     long? ActiveLlmModelId,
     int? RetrievalTopK,
     decimal? MinRelevanceScore,

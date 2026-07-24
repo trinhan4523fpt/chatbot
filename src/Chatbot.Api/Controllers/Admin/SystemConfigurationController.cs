@@ -51,6 +51,8 @@ public sealed class SystemConfigurationController(ISender mediator) : Controller
             new UpdateSystemConfigurationCommand(
                 request.ActiveEmbeddingModelId,
                 request.ActiveChunkingStrategyId,
+                request.ActiveChunkSize,
+                request.ActiveChunkOverlap,
                 request.ActiveLlmModelId,
                 request.RetrievalTopK,
                 request.MinRelevanceScore,

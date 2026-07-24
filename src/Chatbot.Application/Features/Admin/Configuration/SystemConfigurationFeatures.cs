@@ -16,6 +16,8 @@ public sealed record SystemConfigurationDto(
     string? ActiveEmbeddingModelName,
     long? ActiveChunkingStrategyId,
     string? ActiveChunkingStrategyName,
+    int? ActiveChunkSize,
+    int? ActiveChunkOverlap,
     long? ActiveLlmModelId,
     string? ActiveLlmModelName,
     int RetrievalTopK,
@@ -61,6 +63,7 @@ public sealed class GetSystemConfigurationQueryHandler(IAppDbContext db)
         return new SystemConfigurationDto(
             cfg.ActiveEmbeddingModelId, embedding?.Name,
             cfg.ActiveChunkingStrategyId, strategy?.Name,
+            cfg.ActiveChunkSize, cfg.ActiveChunkOverlap,
             cfg.ActiveLlmModelId, llm?.Name,
             cfg.RetrievalTopK, cfg.MinRelevanceScore, cfg.ScopeRestriction,
             cfg.PromptTemplate, cfg.HistoryWindowTurns,
@@ -120,6 +123,8 @@ public sealed class GetConfigOptionsQueryHandler(IAppDbContext db)
         // Kept in step with UpdateSystemConfigurationCommandValidator.
         var ranges = new List<ConfigRangeDto>
         {
+            new("activeChunkSize", 50, 4096, cfg.ActiveChunkSize ?? 0),
+            new("activeChunkOverlap", 0, 1024, cfg.ActiveChunkOverlap ?? 0),
             new("retrievalTopK", 1, 50, cfg.RetrievalTopK),
             new("minRelevanceScore", 0m, 1m, cfg.MinRelevanceScore),
             new("historyWindowTurns", 0, 50, cfg.HistoryWindowTurns),
@@ -171,7 +176,11 @@ public sealed class GetConfigSchemaQueryHandler : IRequestHandler<GetConfigSchem
         new ConfigTabDto("knowledge", "Tài liệu & Chunking", false, new[]
         {
             new ConfigFieldDto("activeChunkingStrategyId", "Chiến lược chunking", "select",
-                "Cách cắt tài liệu thành đoạn. Đổi sẽ cần index lại.", null, null, true),
+                "Thuật toán cắt (fixed / recursive / semantic...). Đổi sẽ cần index lại.", null, null, true),
+            new ConfigFieldDto("activeChunkSize", "Kích thước đoạn (token)", "number",
+                "Ghi đè kích thước của chiến lược. Bỏ trống = dùng mặc định. Đổi cần index lại.", 50, 4096, true),
+            new ConfigFieldDto("activeChunkOverlap", "Độ chồng lấn (token)", "number",
+                "Số token gối đầu giữa 2 đoạn. Phải nhỏ hơn kích thước đoạn. Đổi cần index lại.", 0, 1024, true),
         }),
         new ConfigTabDto("embedding", "Embedding", false, new[]
         {
@@ -215,6 +224,8 @@ public sealed class GetConfigSchemaQueryHandler : IRequestHandler<GetConfigSchem
 public sealed record UpdateSystemConfigurationCommand(
     long? ActiveEmbeddingModelId,
     long? ActiveChunkingStrategyId,
+    int? ActiveChunkSize,
+    int? ActiveChunkOverlap,
     long? ActiveLlmModelId,
     int? RetrievalTopK,
     decimal? MinRelevanceScore,
@@ -244,6 +255,12 @@ public sealed class UpdateSystemConfigurationCommandValidator : AbstractValidato
         RuleFor(x => x.RetrievalTopK).InclusiveBetween(1, 50).When(x => x.RetrievalTopK.HasValue);
         RuleFor(x => x.MinRelevanceScore).InclusiveBetween(0m, 1m).When(x => x.MinRelevanceScore.HasValue);
         RuleFor(x => x.HistoryWindowTurns).InclusiveBetween(0, 50).When(x => x.HistoryWindowTurns.HasValue);
+        RuleFor(x => x.ActiveChunkSize).InclusiveBetween(50, 4096).When(x => x.ActiveChunkSize.HasValue);
+        RuleFor(x => x.ActiveChunkOverlap).GreaterThanOrEqualTo(0).When(x => x.ActiveChunkOverlap.HasValue);
+        RuleFor(x => x)
+            .Must(x => x.ActiveChunkOverlap < x.ActiveChunkSize)
+            .WithMessage("ChunkOverlap phải nhỏ hơn ChunkSize.")
+            .When(x => x.ActiveChunkSize.HasValue && x.ActiveChunkOverlap.HasValue);
         RuleFor(x => x.Temperature).InclusiveBetween(0m, 2m).When(x => x.Temperature.HasValue);
         RuleFor(x => x.MaxOutputTokens).InclusiveBetween(1, 8192).When(x => x.MaxOutputTokens.HasValue);
         RuleFor(x => x.PromptTemplate)
@@ -264,7 +281,12 @@ public sealed class UpdateSystemConfigurationCommandHandler(
             ?? throw new NotFoundException("Chưa có cấu hình hệ thống.");
 
         var embeddingChanged = request.ActiveEmbeddingModelId is { } embId && embId != cfg.ActiveEmbeddingModelId;
-        var chunkingChanged = request.ActiveChunkingStrategyId is { } stratId && stratId != cfg.ActiveChunkingStrategyId;
+        var strategyChanged = request.ActiveChunkingStrategyId is { } stratId && stratId != cfg.ActiveChunkingStrategyId;
+        // Size/overlap changes re-cut every document, but the corpus check keys on strategy id only,
+        // so it cannot see them. Track them here to force the stale check below.
+        var sizeChanged = request.ActiveChunkSize is { } size && size != cfg.ActiveChunkSize;
+        var overlapChanged = request.ActiveChunkOverlap is { } overlap && overlap != cfg.ActiveChunkOverlap;
+        var chunkingChanged = strategyChanged || sizeChanged || overlapChanged;
 
         if (request.ActiveEmbeddingModelId is { } newEmbeddingId)
         {
@@ -288,6 +310,16 @@ public sealed class UpdateSystemConfigurationCommandHandler(
             }
 
             cfg.ActiveChunkingStrategyId = newStrategyId;
+        }
+
+        if (request.ActiveChunkSize is { } newChunkSize)
+        {
+            cfg.ActiveChunkSize = newChunkSize;
+        }
+
+        if (request.ActiveChunkOverlap is { } newChunkOverlap)
+        {
+            cfg.ActiveChunkOverlap = newChunkOverlap;
         }
 
         if (request.ActiveLlmModelId is { } newLlmId)
@@ -356,7 +388,13 @@ public sealed class UpdateSystemConfigurationCommandHandler(
         var corpus = await CorpusStatus.ComputeAsync(
             db, cfg.ActiveEmbeddingModelId, cfg.ActiveChunkingStrategyId, ct);
 
-        if (requiresReindex && corpus.Stale > 0)
+        // A size/overlap change re-cuts documents without changing the strategy id, so the corpus
+        // check (keyed on strategy id) reports 0 stale. Fall back to the indexed count in that case.
+        var stale = (sizeChanged || overlapChanged) && corpus.Stale == 0
+            ? corpus.IndexedDocuments
+            : corpus.Stale;
+
+        if (requiresReindex && stale > 0)
         {
             if (request.ReindexNow)
             {
@@ -366,13 +404,13 @@ public sealed class UpdateSystemConfigurationCommandHandler(
             }
             else
             {
-                warning = $"{corpus.Stale} tài liệu chưa khớp cấu hình mới nên chatbot KHÔNG tìm thấy. " +
+                warning = $"{stale} tài liệu chưa khớp cấu hình mới nên chatbot KHÔNG tìm thấy. " +
                           "Gọi lại với reindexNow=true, hoặc POST /api/v1/admin/config/reindex.";
             }
         }
 
         return new UpdateSystemConfigurationResult(
-            embeddingChanged, chunkingChanged, requiresReindex, queued, corpus.Stale, warning);
+            embeddingChanged, chunkingChanged, requiresReindex, queued, stale, warning);
     }
 
     private async Task<int> QueueReindexAsync(CancellationToken ct) =>

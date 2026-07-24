@@ -68,10 +68,12 @@ public sealed class IngestDocumentJob(
             var parsed = await ai.ParseAsync(bytes, document.OriginalFileName, ct);
             document.PageCount = parsed.PageCount;
 
-            // 2) Chunk via Python.
+            // 2) Chunk via Python. Config-level size/overlap override the strategy's own, if set.
             await AdvanceStageAsync(job, ProcessingStage.Chunk, ct);
+            var chunkSize = cfg.ActiveChunkSize ?? strategy.ChunkSize ?? 512;
+            var chunkOverlap = cfg.ActiveChunkOverlap ?? strategy.ChunkOverlap ?? 50;
             var chunks = await ai.ChunkAsync(
-                parsed.Pages, strategy.Name, strategy.ChunkSize ?? 512, strategy.ChunkOverlap ?? 50, ct);
+                parsed.Pages, strategy.Name, chunkSize, chunkOverlap, ct);
             if (chunks.Count == 0)
             {
                 throw new InvalidOperationException("Không trích xuất được nội dung văn bản từ tài liệu.");

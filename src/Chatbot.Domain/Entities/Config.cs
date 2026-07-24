@@ -47,6 +47,12 @@ public class SystemConfiguration : AuditableEntity
     public long? ActiveChunkingStrategyId { get; set; }
     public long? ActiveLlmModelId { get; set; }
 
+    /// <summary>Overrides the active chunking strategy's ChunkSize (in tokens). Null = use the strategy's own.</summary>
+    public int? ActiveChunkSize { get; set; }
+
+    /// <summary>Overrides the active chunking strategy's ChunkOverlap (in tokens). Null = use the strategy's own.</summary>
+    public int? ActiveChunkOverlap { get; set; }
+
     public int RetrievalTopK { get; set; } = 5;
     public decimal MinRelevanceScore { get; set; } = 0.30m;
     public bool ScopeRestriction { get; set; } = true;
