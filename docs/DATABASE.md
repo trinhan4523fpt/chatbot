@@ -144,8 +144,9 @@ erDiagram
 | `LlmModel` | Model chat và judge |
 | `AppSetting` | Cờ bật/tắt linh tinh |
 
-> `SystemConfiguration.PromptTemplate` nằm ở **DB**, không phải code. Sửa code seed không đổi
-> được DB đang chạy — phải viết migration.
+> `SystemConfiguration` nằm ở **DB**, không phải code. Sửa code seed không đổi được DB đang chạy.
+> Đổi lúc runtime qua `PUT /api/v1/admin/config` (xem [PIPELINES.md](../PIPELINES.md)); đổi cố định
+> theo mã nguồn thì phải viết migration.
 
 ### `rbl` — Nghiên cứu / benchmark
 

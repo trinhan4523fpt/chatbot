@@ -424,6 +424,54 @@ Code: [ml/app/chunking.py](ml/app/chunking.py) · Khai báo: [DbInitializer.cs:1
 | **Chunking strategy** | ✅ **Có** | Cách cắt khác → chunk khác |
 | **Model judge** | ❌ Không | Chỉ dùng lúc chấm điểm |
 
+### Đổi cấu hình qua API
+
+Xem cấu hình đang chạy, kèm trạng thái tài liệu:
+
+```
+GET /api/v1/admin/config
+```
+
+```jsonc
+{
+  "activeEmbeddingModelName": "multilingual-e5-base",
+  "activeChunkingStrategyName": "fixed-512-50",
+  "activeLlmModelName": "gemma2:9b",
+  "retrievalTopK": 5,
+  "corpus": { "indexedDocuments": 5, "upToDate": 5, "stale": 0, "needsReindex": false }
+}
+```
+
+Đổi cấu hình — **chỉ gửi trường muốn đổi**, trường bỏ trống giữ nguyên:
+
+```
+PUT /api/v1/admin/config
+{ "activeEmbeddingModelId": 3, "reindexNow": true }
+```
+
+| Trường | Ý nghĩa |
+|---|---|
+| `activeEmbeddingModelId` / `activeChunkingStrategyId` / `activeLlmModelId` | Đổi model / chiến lược |
+| `retrievalTopK` (1-50) · `minRelevanceScore` (0-1) · `scopeRestriction` | Tinh chỉnh truy hồi |
+| `promptTemplate` | Bắt buộc chứa `{context}` và `{question}` |
+| `historyWindowTurns` (0-50) | Số lượt hội thoại nhớ lại |
+| `reindexNow` | `true` → tự động ingest lại nếu cần |
+
+Ingest lại thủ công toàn bộ tài liệu:
+
+```
+POST /api/v1/admin/config/reindex
+```
+
+> **Vì sao có `corpus`?** Truy hồi khớp theo cặp *(embedding model, chunking strategy)*. Đổi 1
+> trong 2 → tài liệu cũ **vẫn còn trong DB nhưng chatbot không tìm thấy**, cho tới khi ingest lại.
+> `stale` đếm đúng số tài liệu đang ở trạng thái đó, và response `PUT` trả về cảnh báo rõ ràng
+> thay vì im lặng để bạn tự phát hiện.
+
+Cả 3 endpoint cần quyền `admin.config` →
+[SystemConfigurationController.cs](src/Chatbot.Api/Controllers/Admin/SystemConfigurationController.cs) ·
+[SystemConfigurationFeatures.cs](src/Chatbot.Application/Features/Admin/Configuration/SystemConfigurationFeatures.cs)
+
 ### Seed vs Migration
 
 `DbInitializer` **chỉ chạy khi DB trống**. DB đã có dữ liệu → sửa code seed **không có tác dụng**,

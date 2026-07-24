@@ -19,3 +19,15 @@ public sealed record CreateChatSessionRequest(long SubjectId, string? Title);
 public sealed record SendMessageRequest(string Content);
 
 public sealed record ConfirmEmailRequest(string Email, string Code);
+
+/// <summary>Partial update of the active RAG configuration; null fields are left unchanged.</summary>
+public sealed record UpdateSystemConfigurationRequest(
+    long? ActiveEmbeddingModelId,
+    long? ActiveChunkingStrategyId,
+    long? ActiveLlmModelId,
+    int? RetrievalTopK,
+    decimal? MinRelevanceScore,
+    bool? ScopeRestriction,
+    string? PromptTemplate,
+    int? HistoryWindowTurns,
+    bool ReindexNow = false);
