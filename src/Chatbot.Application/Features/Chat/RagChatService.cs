@@ -13,27 +13,27 @@ public sealed class RagChatService(
     IAppDbContext db, IAiServiceClient ai, IVectorStore vectors, IChatCompletionService chat)
     : IRagChatService
 {
-    private const string ScopeMessage = "Tôi không tìm thấy thông tin này trong tài liệu.";
+    private const string ScopeMessage = "I could not find this information in the documents.";
 
     /// <summary>Regeneration attempts allowed when the model answers with Chinese characters.</summary>
     private const int MaxLanguageRetries = 3;
 
     private const string SystemInstruction =
-        "Bạn là trợ lý học tập của một trường đại học Việt Nam. " +
-        "QUY TẮC NGÔN NGỮ (BẮT BUỘC, không có ngoại lệ): toàn bộ câu trả lời PHẢI viết 100% bằng tiếng Việt. " +
-        "TUYỆT ĐỐI KHÔNG được dùng tiếng Trung, chữ Hán, tiếng Anh hay bất kỳ ngôn ngữ nào khác. " +
-        "Không chèn chữ Hán vào giữa câu tiếng Việt. Nếu tài liệu tham khảo chứa ngôn ngữ khác, hãy dịch sang tiếng Việt. " +
-        "Chỉ trả lời dựa trên [NỘI DUNG THAM KHẢO] được cung cấp. " +
-        "Nếu thông tin không có trong tài liệu, trả lời đúng câu: \"Tôi không tìm thấy thông tin này trong tài liệu.\" " +
-        "Trả lời ngắn gọn và trích dẫn nguồn dạng [Nguồn i].";
+        "You are a study assistant for a university. " +
+        "LANGUAGE RULE (MANDATORY, no exceptions): the entire answer MUST be written 100% in English. " +
+        "Do NOT use Chinese, Chinese characters, Vietnamese, or any other language. " +
+        "If the reference material is in another language, translate it into English. " +
+        "Answer only from the [REFERENCE CONTENT] provided. " +
+        "If the information is not in the documents, reply exactly: \"I could not find this information in the documents.\" " +
+        "Be concise and cite sources as [Source i].";
 
     private const string LanguageReminder =
-        "Nhắc lại: trả lời hoàn toàn bằng tiếng Việt, không dùng chữ Hán hay tiếng Trung.";
+        "Reminder: answer entirely in English, with no Chinese characters.";
 
     private const string RetryInstruction =
-        "Câu trả lời trên có chứa chữ Hán/tiếng Trung nên KHÔNG hợp lệ. " +
-        "Hãy viết lại toàn bộ câu trả lời, chỉ dùng tiếng Việt, tuyệt đối không có chữ Hán. " +
-        "Chỉ xuất ra câu trả lời đã sửa, không giải thích gì thêm.";
+        "The answer above contained Chinese characters and is INVALID. " +
+        "Rewrite the whole answer using only English, with absolutely no Chinese characters. " +
+        "Output only the corrected answer, with no extra explanation.";
 
     public async Task<ChatAnswerResult> AnswerAsync(
         long sessionId, long userId, IReadOnlyCollection<string> roles, string question,
@@ -118,7 +118,7 @@ public sealed class RagChatService(
                         continue;
                     }
 
-                    contextBuilder.AppendLine($"[Nguồn {index}] {chunk.Content}");
+                    contextBuilder.AppendLine($"[Source {index}] {chunk.Content}");
                     var snippet = chunk.Content.Length > 300 ? chunk.Content[..300] : chunk.Content;
                     citations.Add(new ChatCitationDto(
                         chunk.Id, chunk.DocumentId, chunk.Title, (decimal)Math.Round(hit.Score, 6),
@@ -211,7 +211,7 @@ public sealed class RagChatService(
 
     private static string BuildPrompt(string? template, string context, string question)
     {
-        template ??= "[NỘI DUNG THAM KHẢO]\n{context}\n\n[CÂU HỎI]\n{question}";
+        template ??= "[REFERENCE CONTENT]\n{context}\n\n[QUESTION]\n{question}";
         var prompt = template.Replace("{context}", context).Replace("{question}", question);
         return prompt + "\n\n" + LanguageReminder;
     }

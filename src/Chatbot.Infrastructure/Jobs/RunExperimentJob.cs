@@ -32,16 +32,16 @@ public sealed class RunExperimentJob(
     ILogger<RunExperimentJob> logger)
 {
     private const string SystemInstruction =
-        "Bạn là trợ lý học tập của một trường đại học Việt Nam. " +
-        "QUY TẮC NGÔN NGỮ (BẮT BUỘC, không có ngoại lệ): toàn bộ câu trả lời PHẢI viết 100% bằng tiếng Việt. " +
-        "TUYỆT ĐỐI KHÔNG được dùng tiếng Trung, chữ Hán, tiếng Anh hay bất kỳ ngôn ngữ nào khác. " +
-        "Không chèn chữ Hán vào giữa câu tiếng Việt. Nếu tài liệu tham khảo chứa ngôn ngữ khác, hãy dịch sang tiếng Việt. " +
-        "Chỉ trả lời dựa trên [NỘI DUNG THAM KHẢO] được cung cấp. " +
-        "Nếu thông tin không có trong tài liệu, trả lời đúng câu: \"Tôi không tìm thấy thông tin này trong tài liệu.\" " +
-        "Trả lời ngắn gọn.";
+        "You are a study assistant for a university. " +
+        "LANGUAGE RULE (MANDATORY, no exceptions): the entire answer MUST be written 100% in English. " +
+        "Do NOT use Chinese, Chinese characters, Vietnamese, or any other language. " +
+        "If the reference material is in another language, translate it into English. " +
+        "Answer only from the [REFERENCE CONTENT] provided. " +
+        "If the information is not in the documents, reply exactly: \"I could not find this information in the documents.\" " +
+        "Be concise.";
 
     private const string LanguageReminder =
-        "Nhắc lại: trả lời hoàn toàn bằng tiếng Việt, không dùng chữ Hán hay tiếng Trung.";
+        "Reminder: answer entirely in English, with no Chinese characters.";
 
     [AutomaticRetry(Attempts = 2)]
     public async Task RunAsync(long experimentRunId, CancellationToken ct)
@@ -174,16 +174,16 @@ public sealed class RunExperimentJob(
     {
         if (contexts.Count == 0)
         {
-            return "Tôi không tìm thấy thông tin này trong tài liệu.";
+            return "I could not find this information in the documents.";
         }
 
         var contextBuilder = new StringBuilder();
         for (var i = 0; i < contexts.Count; i++)
         {
-            contextBuilder.AppendLine($"[Nguồn {i + 1}] {contexts[i]}");
+            contextBuilder.AppendLine($"[Source {i + 1}] {contexts[i]}");
         }
 
-        var prompt = (template ?? "[NỘI DUNG THAM KHẢO]\n{context}\n\n[CÂU HỎI]\n{question}")
+        var prompt = (template ?? "[REFERENCE CONTENT]\n{context}\n\n[QUESTION]\n{question}")
             .Replace("{context}", contextBuilder.ToString())
             .Replace("{question}", question)
             + "\n\n" + LanguageReminder;
