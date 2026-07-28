@@ -4,6 +4,7 @@ using Chatbot.Application.Features.Payment;
 using Chatbot.Domain.Enums;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using static Chatbot.Application.Features.Payment.AdminRevokeOrder;
 
 namespace Chatbot.Api.Controllers;
 
@@ -249,5 +250,41 @@ public sealed class PaymentController(
         var result = await Chatbot.Application.Features.Payment.ListOrders.ExecuteAsync(
             db, new Chatbot.Application.Features.Payment.ListOrders.Query(parsedStatus, userId, packageId, from, to, null, page, pageSize), ct);
         return Ok(result);
+    }
+
+    /// <summary>
+    /// Admin hủy đơn hàng đã thanh toán của học sinh và thu hồi token tương ứng khỏi ví.
+    /// Chỉ áp dụng với đơn có trạng thái Paid. Bắt buộc ghi lý do thu hồi.
+    /// </summary>
+    [HttpDelete("orders/{id:long}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> RevokeOrder(
+        long id,
+        [FromBody] RevokeOrderRequest req,
+        CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(req.Reason))
+            return BadRequest(new { message = "Cần ghi lý do thu hồi." });
+
+        try
+        {
+            var result = await AdminRevokeOrder.ExecuteAsync(
+                db, new AdminRevokeOrder.Command(id, req.Reason), ct);
+
+            logger.LogInformation(
+                "[Admin] Đã thu hồi đơn hàng #{OrderId} ({OrderRef}), hoàn lại {Tokens} token. Lý do: {Reason}",
+                result.OrderId, result.OrderRef, result.TokensRevoked, req.Reason);
+
+            return Ok(new
+            {
+                message = $"Đã hủy đơn hàng {result.OrderRef} và thu hồi {result.TokensRevoked} token.",
+                orderId = result.OrderId,
+                orderRef = result.OrderRef,
+                tokensRevoked = result.TokensRevoked,
+                walletBalanceAfter = result.WalletBalanceAfter,
+            });
+        }
+        catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
+        catch (InvalidOperationException ex) { return BadRequest(new { message = ex.Message }); }
     }
 }

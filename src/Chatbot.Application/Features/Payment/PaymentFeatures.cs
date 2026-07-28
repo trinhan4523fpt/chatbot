@@ -611,3 +611,60 @@ public static class AdminAdjustTokens
         await db.SaveChangesAsync(ct);
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  ADMIN REVOKE ORDER — Admin hủy gói mua của học sinh, thu hồi token
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// <summary>
+/// Admin hủy đơn hàng đã thanh toán của học sinh và thu hồi token tương ứng khỏi ví.
+/// Chỉ áp dụng với đơn có Status = Paid. Ghi lại lý do vào lịch sử giao dịch.
+/// </summary>
+public static class AdminRevokeOrder
+{
+    public sealed record Command(long OrderId, string Reason);
+    public sealed record Result(long OrderId, string OrderRef, int TokensRevoked, int WalletBalanceAfter);
+
+    public static async Task<Result> ExecuteAsync(
+        IPaymentDbContext db, Command cmd, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(cmd.Reason))
+            throw new ArgumentException("Cần ghi lý do thu hồi.", nameof(cmd.Reason));
+
+        var order = await db.StudentTokenOrders
+            .FirstOrDefaultAsync(o => o.Id == cmd.OrderId, ct)
+            ?? throw new KeyNotFoundException($"Không tìm thấy đơn hàng #{cmd.OrderId}.");
+
+        if (order.Status != OrderStatus.Paid)
+            throw new InvalidOperationException(
+                $"Chỉ có thể hủy đơn đã thanh toán (Paid). Trạng thái hiện tại: {order.Status}.");
+
+        // Thu hồi token khỏi ví
+        var wallet = await db.StudentTokenWallets
+            .FirstOrDefaultAsync(w => w.UserId == order.UserId, ct)
+            ?? throw new InvalidOperationException("Học sinh chưa có ví token.");
+
+        var tokensToRevoke = Math.Min(order.TokenAmount, wallet.AvailableTokens);
+        wallet.AvailableTokens -= tokensToRevoke;
+        wallet.UsedTokens = Math.Max(0, wallet.UsedTokens - Math.Max(0, order.TokenAmount - tokensToRevoke));
+
+        // Ghi lịch sử giao dịch
+        var tx = new TokenTransaction
+        {
+            UserId = order.UserId,
+            Type = TokenTransactionType.AdminAdjustment,
+            Delta = -tokensToRevoke,
+            BalanceAfter = wallet.AvailableTokens,
+            Description = $"[Admin thu hồi đơn #{order.OrderRef}] {cmd.Reason}",
+            OrderId = order.Id,
+        };
+        wallet.Transactions.Add(tx);
+
+        // Đánh dấu đơn hàng là đã bị hủy
+        order.Status = OrderStatus.Failed;
+
+        await db.SaveChangesAsync(ct);
+
+        return new Result(order.Id, order.OrderRef, tokensToRevoke, wallet.AvailableTokens);
+    }
+}

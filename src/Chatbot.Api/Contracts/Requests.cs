@@ -66,3 +66,5 @@ public sealed record AdminAdjustRequest(
 
 public sealed record RefundOrderRequest(string Reason);
 
+/// <summary>Admin hủy đơn hàng đã mua của học sinh và thu hồi token. Bắt buộc ghi lý do.</summary>
+public sealed record RevokeOrderRequest(string Reason);
