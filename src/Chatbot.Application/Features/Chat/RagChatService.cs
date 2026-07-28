@@ -185,6 +185,15 @@ public sealed class RagChatService(
             assistant.Content = content.ToString();
             assistant.Status = ChatMessageStatus.Complete;
             assistant.LatencyMs = (int)stopwatch.ElapsedMilliseconds;
+
+            // The chunks cleared the score threshold but the model still judged them irrelevant and
+            // refused. Showing citations under a "not found" answer is contradictory, so drop them.
+            if (content.ToString().Contains(ScopeMessage, StringComparison.OrdinalIgnoreCase))
+            {
+                citations.Clear();
+                scopeRestricted = true;
+            }
+
             foreach (var c in citations)
             {
                 db.MessageCitations.Add(new MessageCitation

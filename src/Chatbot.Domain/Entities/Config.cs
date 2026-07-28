@@ -54,7 +54,9 @@ public class SystemConfiguration : AuditableEntity
     public int? ActiveChunkOverlap { get; set; }
 
     public int RetrievalTopK { get; set; } = 5;
-    public decimal MinRelevanceScore { get; set; } = 0.30m;
+    // 0.83: measured on multilingual-e5, off-topic questions score ~0.77-0.81 while on-topic
+    // ones score ~0.87+. A low threshold let unrelated chunks through as citations.
+    public decimal MinRelevanceScore { get; set; } = 0.83m;
     public bool ScopeRestriction { get; set; } = true;
     public string? PromptTemplate { get; set; }
 
