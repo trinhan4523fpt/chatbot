@@ -34,6 +34,7 @@ public sealed class DbInitializer(
         await SeedSystemConfigurationAsync(ct);
         await SeedAdminAsync(ct);
         await SeedTestQuestionsAsync(ct);
+        await SeedTokenPackagesAsync(ct);
         await ReconcileEmbeddingDimensionsAsync(ct);
 
         AssertPermissionMatrix();
@@ -177,7 +178,7 @@ public sealed class DbInitializer(
     {
         var charStrategy = await db.ChunkingStrategies.FirstAsync(s => s.Name == "char-500", ct);
 
-        var existing = await db.SystemConfigurations.FindAsync([1], ct);
+        var existing = await db.SystemConfigurations.FindAsync([1L], ct);
         if (existing is not null)
         {
             // Cập nhật active chunking strategy sang char-500 nếu đang dùng strategy cũ
@@ -323,6 +324,50 @@ public sealed class DbInitializer(
         {
             set.Add(factory());
         }
+    }
+
+    /// <summary>
+    /// Seed 3 gói token mặc định — idempotent (không tạo lại nếu đã tồn tại).
+    /// Bảng giá:
+    ///   Thường (Basic)  10.000đ  → 100 token
+    ///   Plus             20.000đ  → 250 token
+    ///   Pro              50.000đ  → 700 token
+    /// </summary>
+    private async Task SeedTokenPackagesAsync(CancellationToken ct)
+    {
+        var packages = new[]
+        {
+            new { Name = "Thường (Basic)",  Price = 10_000m, Tokens = 100, Days = (int?)30, Order = 1,
+                  Desc = "Gói cơ bản — 100 câu hỏi, hiệu lực 30 ngày." },
+            new { Name = "Plus",               Price = 20_000m, Tokens = 250, Days = (int?)30, Order = 2,
+                  Desc = "Gói Plus — 250 câu hỏi, hiệu lực 30 ngày." },
+            new { Name = "Pro",                Price = 50_000m, Tokens = 700, Days = (int?)30, Order = 3,
+                  Desc = "Gói Pro — 700 câu hỏi, hiệu lực 30 ngày." },
+        };
+
+        var changed = false;
+        foreach (var pkg in packages)
+        {
+            if (!await db.TokenPackages.AnyAsync(p => p.Name == pkg.Name, ct))
+            {
+                db.TokenPackages.Add(new Chatbot.Domain.Entities.TokenPackage
+                {
+                    Name        = pkg.Name,
+                    Description = pkg.Desc,
+                    TokenAmount = pkg.Tokens,
+                    Price       = pkg.Price,
+                    ValidityDays = pkg.Days,
+                    DisplayOrder = pkg.Order,
+                    IsActive    = true,
+                });
+                changed = true;
+                logger.LogInformation("Seeded token package \u201c{Name}\u201d ({Tokens} tokens / {Price:#,0}\u0111).",
+                    pkg.Name, pkg.Tokens, pkg.Price);
+            }
+        }
+
+        if (changed)
+            await db.SaveChangesAsync(ct);
     }
 
     private const string DefaultPromptTemplate =

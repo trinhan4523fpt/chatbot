@@ -117,3 +117,35 @@ public enum OutboxEventType
     QdrantUpsert,
     QdrantDelete,
 }
+
+// ── Payment / Token ──────────────────────────────────────────────────────────
+
+/// <summary>Trạng thái đơn hàng mua gói token.</summary>
+public enum OrderStatus
+{
+    /// <summary>Chờ thanh toán.</summary>
+    Pending,
+    /// <summary>Thanh toán thành công, token đã được cộng vào ví.</summary>
+    Paid,
+    /// <summary>Đơn hàng đã hết hạn chờ (quá 15 phút không thanh toán).</summary>
+    Expired,
+    /// <summary>Thanh toán thất bại (VnPay trả lỗi).</summary>
+    Failed,
+    /// <summary>Đã hoàn tiền.</summary>
+    Refunded,
+}
+
+/// <summary>Loại giao dịch token trong ví.</summary>
+public enum TokenTransactionType
+{
+    /// <summary>Cộng token khi mua gói thành công.</summary>
+    Purchase,
+    /// <summary>Trừ token mỗi lần dùng chatbot.</summary>
+    ChatUsage,
+    /// <summary>Admin cộng/trừ thủ công (điều chỉnh).</summary>
+    AdminAdjustment,
+    /// <summary>Hoàn token do refund.</summary>
+    Refund,
+    /// <summary>Token hết hạn, hệ thống xoá số dư.</summary>
+    Expiry,
+}

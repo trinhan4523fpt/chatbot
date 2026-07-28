@@ -1,0 +1,174 @@
+### Revenue Report API — Test file
+### Thay @token bằng JWT token của Admin
+
+@baseUrl = https://localhost:7001/api/v1
+@token = YOUR_ADMIN_JWT_TOKEN_HERE
+
+# ─────────────────────────────────────────────────────────────────────────────
+# KPI TỔNG QUAN
+# ─────────────────────────────────────────────────────────────────────────────
+
+### 1. Tổng quan doanh thu (summary KPI)
+GET {{baseUrl}}/reports/revenue/summary
+Authorization: Bearer {{token}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────────────────
+# BIỂU ĐỒ
+# ─────────────────────────────────────────────────────────────────────────────
+
+### 2. Doanh thu 12 tháng năm hiện tại
+GET {{baseUrl}}/reports/revenue/monthly
+Authorization: Bearer {{token}}
+
+### 3. Doanh thu 12 tháng năm 2025
+GET {{baseUrl}}/reports/revenue/monthly?year=2025
+Authorization: Bearer {{token}}
+
+### 4. Doanh thu 30 ngày gần nhất (mặc định)
+GET {{baseUrl}}/reports/revenue/daily
+Authorization: Bearer {{token}}
+
+### 5. Doanh thu theo ngày trong khoảng tùy chọn
+GET {{baseUrl}}/reports/revenue/daily?from=2026-07-01&to=2026-07-27
+Authorization: Bearer {{token}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GÓI TOKEN
+# ─────────────────────────────────────────────────────────────────────────────
+
+### 6. Thống kê từng gói token
+GET {{baseUrl}}/reports/revenue/packages
+Authorization: Bearer {{token}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ĐƠN HÀNG
+# ─────────────────────────────────────────────────────────────────────────────
+
+### 7. Tất cả đơn hàng (phân trang)
+GET {{baseUrl}}/reports/revenue/orders?page=1&pageSize=20
+Authorization: Bearer {{token}}
+
+### 8. Lọc đơn đã thanh toán
+GET {{baseUrl}}/reports/revenue/orders?status=Paid&page=1&pageSize=20
+Authorization: Bearer {{token}}
+
+### 9. Lọc đơn đang chờ
+GET {{baseUrl}}/reports/revenue/orders?status=Pending
+Authorization: Bearer {{token}}
+
+### 10. Tìm kiếm theo email hoặc họ tên
+GET {{baseUrl}}/reports/revenue/orders?search=nguyen&status=Paid
+Authorization: Bearer {{token}}
+
+### 11. Lọc theo khoảng ngày
+GET {{baseUrl}}/reports/revenue/orders?from=2026-07-01&to=2026-07-31&status=Paid
+Authorization: Bearer {{token}}
+
+### 12. Lọc theo gói cụ thể (packageId)
+GET {{baseUrl}}/reports/revenue/orders?packageId=1&status=Paid
+Authorization: Bearer {{token}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────────────────
+# LỊCH SỬ HỌC SINH
+# ─────────────────────────────────────────────────────────────────────────────
+
+### 13. Xem lịch sử mua & giao dịch token của học sinh #2
+GET {{baseUrl}}/reports/revenue/students/2/history
+Authorization: Bearer {{token}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HOÀN TIỀN
+# ─────────────────────────────────────────────────────────────────────────────
+
+### 14. Hoàn tiền đơn #5
+POST {{baseUrl}}/reports/revenue/orders/5/refund
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "reason": "Học sinh yêu cầu hoàn tiền do lỗi hệ thống"
+}
+
+###
+
+# ─────────────────────────────────────────────────────────────────────────────
+# XUẤT CSV
+# ─────────────────────────────────────────────────────────────────────────────
+
+### 15. Xuất tất cả đơn ra CSV
+GET {{baseUrl}}/reports/revenue/orders/export-csv
+Authorization: Bearer {{token}}
+
+### 16. Xuất đơn đã thanh toán trong tháng 7/2026
+GET {{baseUrl}}/reports/revenue/orders/export-csv?status=Paid&from=2026-07-01&to=2026-07-31
+Authorization: Bearer {{token}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────────────────
+# TOKEN USAGE
+# ─────────────────────────────────────────────────────────────────────────────
+
+### 17. Thống kê sử dụng token (top học sinh)
+GET {{baseUrl}}/reports/revenue/token-usage
+Authorization: Bearer {{token}}
+
+###
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PAYMENT — Quản lý gói (Admin)
+# ─────────────────────────────────────────────────────────────────────────────
+
+### 18. Danh sách tất cả gói (kể cả inactive)
+GET {{baseUrl}}/payment/packages?includeInactive=true
+Authorization: Bearer {{token}}
+
+### 19. Tạo gói mới
+POST {{baseUrl}}/payment/packages
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "VIP",
+  "description": "Gói VIP — 2000 câu hỏi, hiệu lực 90 ngày",
+  "tokenAmount": 2000,
+  "price": 150000,
+  "validityDays": 90,
+  "displayOrder": 4
+}
+
+### 20. Cập nhật gói #1
+PUT {{baseUrl}}/payment/packages/1
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "Thường (Basic)",
+  "description": "Gói cơ bản — 100 câu hỏi, hiệu lực 30 ngày",
+  "tokenAmount": 100,
+  "price": 10000,
+  "validityDays": 30,
+  "isActive": true,
+  "displayOrder": 1
+}
+
+### 21. Admin điều chỉnh token cho học sinh
+POST {{baseUrl}}/payment/wallet/admin-adjust
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "userId": 2,
+  "delta": 50,
+  "reason": "Tặng token do lỗi hệ thống ngày 20/07"
+}

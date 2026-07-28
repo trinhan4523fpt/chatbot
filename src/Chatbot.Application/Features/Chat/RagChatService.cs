@@ -3,6 +3,7 @@ using System.Text;
 using Chatbot.Application.Common;
 using Chatbot.Application.Common.Exceptions;
 using Chatbot.Application.Common.Interfaces;
+using Chatbot.Application.Features.Payment;
 using Chatbot.Domain.Entities;
 using Chatbot.Domain.Enums;
 using Microsoft.EntityFrameworkCore;
@@ -10,7 +11,8 @@ using Microsoft.EntityFrameworkCore;
 namespace Chatbot.Application.Features.Chat;
 
 public sealed class RagChatService(
-    IAppDbContext db, IAiServiceClient ai, IVectorStore vectors, IChatCompletionService chat)
+    IAppDbContext db, IPaymentDbContext paymentDb,
+    IAiServiceClient ai, IVectorStore vectors, IChatCompletionService chat)
     : IRagChatService
 {
     private const string ScopeMessage = "I could not find this information in the documents.";
@@ -39,6 +41,25 @@ public sealed class RagChatService(
         long sessionId, long userId, IReadOnlyCollection<string> roles, string question,
         Func<string, Task> onToken, Func<Task> onReset, CancellationToken ct)
     {
+        // ── Kiểm tra & trừ token trước khi gọi AI (1 câu hỏi = 1 token) ──────────────
+        // Admin & Lecturer không bị trừ token.
+        var isStudentRole = !roles.Contains("Admin") && !roles.Contains("Lecturer");
+        if (isStudentRole)
+        {
+            var tokenResult = await ConsumeToken.ExecuteAsync(
+                paymentDb,
+                new ConsumeToken.Command(
+                    UserId: userId,
+                    Amount: 1,
+                    Description: $"Câu hỏi trong phiên #{sessionId}"),
+                ct);
+
+            if (!tokenResult.Allowed)
+                throw new ForbiddenException(tokenResult.Reason
+                    ?? "Không đủ token. Vui lòng mua gói để tiếp tục dùng chatbot.");
+        }
+        // ─────────────────────────────────────────────────────────────────────────────
+
         var session = await db.ChatSessions.FirstOrDefaultAsync(s => s.Id == sessionId, ct)
             ?? throw new NotFoundException("Không tìm thấy phiên chat.");
         if (session.UserId != userId)

@@ -53,5 +53,11 @@ public interface IAppDbContext
     DbSet<AuditLog> AuditLogs { get; }
     DbSet<IntegrationOutbox> IntegrationOutbox { get; }
 
+    // Payment / Token
+    DbSet<TokenPackage> TokenPackages { get; }
+    DbSet<StudentTokenOrder> StudentTokenOrders { get; }
+    DbSet<StudentTokenWallet> StudentTokenWallets { get; }
+    DbSet<TokenTransaction> TokenTransactions { get; }
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken = default);
 }

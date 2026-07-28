@@ -7,7 +7,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Chatbot.Infrastructure.Persistence;
 
 public class ChatbotDbContext(DbContextOptions<ChatbotDbContext> options)
-    : DbContext(options), IAppDbContext
+    : DbContext(options), IAppDbContext, IPaymentDbContext
 {
     public DbSet<User> Users => Set<User>();
     public DbSet<Role> Roles => Set<Role>();
@@ -48,6 +48,12 @@ public class ChatbotDbContext(DbContextOptions<ChatbotDbContext> options)
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<IntegrationOutbox> IntegrationOutbox => Set<IntegrationOutbox>();
 
+    // Payment / Token
+    public DbSet<TokenPackage> TokenPackages => Set<TokenPackage>();
+    public DbSet<StudentTokenOrder> StudentTokenOrders => Set<StudentTokenOrder>();
+    public DbSet<StudentTokenWallet> StudentTokenWallets => Set<StudentTokenWallet>();
+    public DbSet<TokenTransaction> TokenTransactions => Set<TokenTransaction>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -82,5 +88,7 @@ public class ChatbotDbContext(DbContextOptions<ChatbotDbContext> options)
         configurationBuilder.Properties<Difficulty>().HaveConversion<SnakeCaseEnumConverter<Difficulty>>().HaveMaxLength(10);
         configurationBuilder.Properties<OutboxStatus>().HaveConversion<SnakeCaseEnumConverter<OutboxStatus>>().HaveMaxLength(20);
         configurationBuilder.Properties<OutboxEventType>().HaveConversion<SnakeCaseEnumConverter<OutboxEventType>>().HaveMaxLength(30);
+        configurationBuilder.Properties<OrderStatus>().HaveConversion<SnakeCaseEnumConverter<OrderStatus>>().HaveMaxLength(20);
+        configurationBuilder.Properties<TokenTransactionType>().HaveConversion<SnakeCaseEnumConverter<TokenTransactionType>>().HaveMaxLength(20);
     }
 }

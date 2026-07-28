@@ -3,6 +3,7 @@ using Chatbot.Infrastructure.Identity;
 using Chatbot.Infrastructure.Jobs;
 using Chatbot.Infrastructure.Ml;
 using Chatbot.Infrastructure.Options;
+using Chatbot.Infrastructure.Payment;
 using Chatbot.Infrastructure.Persistence;
 using Chatbot.Infrastructure.Persistence.Interceptors;
 using Chatbot.Infrastructure.Persistence.Seed;
@@ -51,7 +52,13 @@ public static class DependencyInjection
             options.ConfigureWarnings(w => w.Ignore(Microsoft.EntityFrameworkCore.Diagnostics.RelationalEventId.PendingModelChangesWarning));
         });
         services.AddScoped<IAppDbContext>(sp => sp.GetRequiredService<ChatbotDbContext>());
+        services.AddScoped<IPaymentDbContext>(sp => sp.GetRequiredService<ChatbotDbContext>());
         services.AddScoped<DbInitializer>();
+
+        // VnPay payment gateway (stub — replace with real implementation later).
+        services.AddOptions<VnPayOptions>()
+            .Bind(configuration.GetSection(VnPayOptions.Section));
+        services.AddScoped<IVnPayService, VnPayService>();
 
         // Qdrant (vector store — .NET owns all vector ops).
         services.AddSingleton(sp =>

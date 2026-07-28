@@ -35,3 +35,34 @@ public sealed record UpdateSystemConfigurationRequest(
     decimal? Temperature,
     int? MaxOutputTokens,
     bool ReindexNow = false);
+
+// ── Payment / Token ──────────────────────────────────────────────────────────
+
+public sealed record CreatePackageRequest(
+    string Name,
+    string? Description,
+    int TokenAmount,
+    decimal Price,
+    int? ValidityDays,
+    int DisplayOrder = 0);
+
+public sealed record UpdatePackageRequest(
+    string Name,
+    string? Description,
+    int TokenAmount,
+    decimal Price,
+    int? ValidityDays,
+    bool IsActive,
+    int DisplayOrder);
+
+public sealed record CreateOrderRequest(
+    long PackageId,
+    string? ReturnUrl = null);
+
+public sealed record AdminAdjustRequest(
+    long UserId,
+    int Delta,
+    string Reason);
+
+public sealed record RefundOrderRequest(string Reason);
+
