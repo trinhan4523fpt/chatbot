@@ -152,7 +152,7 @@ public static class CreateTokenOrder
         foreach (var old in oldPending)
             old.Status = OrderStatus.Expired;
 
-        var orderRef = $"ORD-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N[..8]}";
+        var orderRef = $"ORD-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString("N")[..8].ToUpper()}";
 
         var order = new StudentTokenOrder
         {
@@ -176,6 +176,60 @@ public static class CreateTokenOrder
             cmd.ClientIp);
 
         return new Result(order.Id, orderRef, paymentUrl);
+    }
+}
+
+/// <summary>Học sinh xem danh sách đơn hàng mua gói token của chính mình.</summary>
+public static class GetMyTokenOrders
+{
+    public sealed record Query(
+        long UserId,
+        OrderStatus? Status = null,
+        int Page = 1,
+        int PageSize = 20);
+
+    public sealed record OrderDto(
+        long Id,
+        string OrderRef,
+        long PackageId,
+        string PackageName,
+        decimal AmountPaid,
+        int TokenAmount,
+        string Status,
+        string? VnpayTransactionId,
+        string? VnpayBankCode,
+        string? VnpayCardType,
+        DateTime? PaidAtUtc,
+        DateTime CreatedAtUtc,
+        DateTime ExpiredAtUtc);
+
+    public sealed record Result(IReadOnlyList<OrderDto> Items, int TotalCount);
+
+    public static async Task<Result> ExecuteAsync(
+        IPaymentDbContext db, Query q, CancellationToken ct = default)
+    {
+        var query = db.StudentTokenOrders
+            .Where(o => o.UserId == q.UserId);
+
+        if (q.Status.HasValue)
+            query = query.Where(o => o.Status == q.Status.Value);
+
+        var total = await query.CountAsync(ct);
+
+        var items = await query
+            .OrderByDescending(o => o.CreatedAtUtc)
+            .Skip((q.Page - 1) * q.PageSize)
+            .Take(q.PageSize)
+            .Select(o => new OrderDto(
+                o.Id, o.OrderRef,
+                o.PackageId, o.Package.Name,
+                o.AmountPaid, o.TokenAmount,
+                o.Status.ToString(),
+                o.VnpayTransactionId, o.VnpayBankCode, o.VnpayCardType,
+                o.PaidAtUtc, o.CreatedAtUtc, o.ExpiredAtUtc))
+            .ToListAsync(ct);
+
+        return new Result(items, total);
     }
 }
 

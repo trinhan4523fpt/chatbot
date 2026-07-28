@@ -107,6 +107,24 @@ public sealed class PaymentController(
         catch (KeyNotFoundException ex) { return NotFound(new { message = ex.Message }); }
     }
 
+    /// <summary>Học sinh xem lịch sử các đơn hàng mua gói token của chính mình.</summary>
+    [HttpGet("orders/me")]
+    [Authorize(Roles = "Student")]
+    public async Task<IActionResult> GetMyOrders(
+        [FromQuery] string? status = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 20,
+        CancellationToken ct = default)
+    {
+        OrderStatus? parsedStatus = null;
+        if (!string.IsNullOrEmpty(status) && Enum.TryParse<OrderStatus>(status, true, out var s))
+            parsedStatus = s;
+
+        var result = await GetMyTokenOrders.ExecuteAsync(
+            db, new GetMyTokenOrders.Query(currentUser.UserId!.Value, parsedStatus, page, pageSize), ct);
+        return Ok(result);
+    }
+
     /// <summary>
     /// VnPay Return URL — học sinh được redirect về đây sau khi thanh toán.
     /// Trả về JSON để frontend SPA xử lý.
