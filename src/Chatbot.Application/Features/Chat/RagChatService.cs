@@ -136,6 +136,8 @@ public sealed class RagChatService(
                 {
                     if (!byId.TryGetValue(hit.ChunkId, out var chunk))
                     {
+                        // Qdrant returned a point whose chunk no longer exists in the DB — an orphan
+                        // left behind by a reindex or delete. Skip it rather than cite a missing chunk.
                         continue;
                     }
 
@@ -147,38 +149,50 @@ public sealed class RagChatService(
                     index++;
                 }
 
-                var turns = new List<ChatTurn> { new("system", SystemInstruction) };
-                foreach (var h in history)
+                // Every hit was an orphan (its chunk is gone from the DB), so there is no real context
+                // to answer from. Refuse instead of sending an empty context and letting the model
+                // invent an answer with no sources.
+                if (citations.Count == 0)
                 {
-                    turns.Add(new ChatTurn(h.Role == ChatRole.User ? "user" : "assistant", h.Content));
+                    scopeRestricted = true;
+                    content.Append(ScopeMessage);
+                    await onToken(ScopeMessage);
                 }
-
-                turns.Add(new ChatTurn("user", BuildPrompt(cfg.PromptTemplate, contextBuilder.ToString(), question)));
-
-                var sampling = new ChatSamplingOptions((float)cfg.Temperature, cfg.MaxOutputTokens);
-                var answer = await StreamAnswerAsync(turns, llmModel.Name, sampling, onToken, ct);
-
-                // Qwen drifts into Chinese despite the instruction, and a corrective retry can drift
-                // again, so keep regenerating while the answer is invalid. Each attempt replays the
-                // rejected text so the model sees what to avoid; the client clears the bad partial
-                // via onReset. Attempts are bounded, and a last resort strips the stray characters
-                // rather than let any Chinese reach the user.
-                for (var attempt = 0; attempt < MaxLanguageRetries && AnswerLanguagePolicy.ContainsChinese(answer); attempt++)
+                else
                 {
-                    await onReset();
-                    turns.Add(new ChatTurn("assistant", answer));
-                    turns.Add(new ChatTurn("user", RetryInstruction));
-                    answer = await StreamAnswerAsync(turns, llmModel.Name, sampling, onToken, ct);
-                }
+                    var turns = new List<ChatTurn> { new("system", SystemInstruction) };
+                    foreach (var h in history)
+                    {
+                        turns.Add(new ChatTurn(h.Role == ChatRole.User ? "user" : "assistant", h.Content));
+                    }
 
-                if (AnswerLanguagePolicy.ContainsChinese(answer))
-                {
-                    answer = AnswerLanguagePolicy.StripChinese(answer);
-                    await onReset();
-                    await onToken(answer);
-                }
+                    turns.Add(new ChatTurn("user", BuildPrompt(cfg.PromptTemplate, contextBuilder.ToString(), question)));
 
-                content.Append(answer);
+                    var sampling = new ChatSamplingOptions((float)cfg.Temperature, cfg.MaxOutputTokens);
+                    var answer = await StreamAnswerAsync(turns, llmModel.Name, sampling, onToken, ct);
+
+                    // Qwen drifts into Chinese despite the instruction, and a corrective retry can drift
+                    // again, so keep regenerating while the answer is invalid. Each attempt replays the
+                    // rejected text so the model sees what to avoid; the client clears the bad partial
+                    // via onReset. Attempts are bounded, and a last resort strips the stray characters
+                    // rather than let any Chinese reach the user.
+                    for (var attempt = 0; attempt < MaxLanguageRetries && AnswerLanguagePolicy.ContainsChinese(answer); attempt++)
+                    {
+                        await onReset();
+                        turns.Add(new ChatTurn("assistant", answer));
+                        turns.Add(new ChatTurn("user", RetryInstruction));
+                        answer = await StreamAnswerAsync(turns, llmModel.Name, sampling, onToken, ct);
+                    }
+
+                    if (AnswerLanguagePolicy.ContainsChinese(answer))
+                    {
+                        answer = AnswerLanguagePolicy.StripChinese(answer);
+                        await onReset();
+                        await onToken(answer);
+                    }
+
+                    content.Append(answer);
+                }
             }
 
             stopwatch.Stop();
