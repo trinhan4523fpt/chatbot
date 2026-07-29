@@ -97,4 +97,24 @@ public sealed class QdrantVectorStore(QdrantClient client) : IVectorStore
         filter.Must.Add(Conditions.Match("documentId", documentId));
         await client.DeleteAsync(collection, filter, cancellationToken: ct);
     }
+
+    public async Task<int> DeleteDocumentEverywhereAsync(
+        string embeddingCollectionBase, long documentId, CancellationToken ct = default)
+    {
+        // Collections are named "{base}__strat_{id}" (see VectorCollectionNaming), one per chunking
+        // strategy. Delete the document's points from every one so no orphan survives a strategy change.
+        var prefix = embeddingCollectionBase + "__strat_";
+        var collections = (await client.ListCollectionsAsync(ct))
+            .Where(name => name.StartsWith(prefix, StringComparison.Ordinal))
+            .ToList();
+
+        var filter = new Filter();
+        filter.Must.Add(Conditions.Match("documentId", documentId));
+        foreach (var collection in collections)
+        {
+            await client.DeleteAsync(collection, filter, cancellationToken: ct);
+        }
+
+        return collections.Count;
+    }
 }

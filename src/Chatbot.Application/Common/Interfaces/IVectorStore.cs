@@ -26,4 +26,11 @@ public interface IVectorStore
         string collection, float[] queryVector, int topK, long subjectId, CancellationToken ct = default);
 
     Task DeleteByDocumentAsync(string collection, long documentId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Removes a document's vectors from every collection of an embedding model (all chunking
+    /// strategies), so a reindex under a new strategy does not leave orphaned points behind in the
+    /// old collection. Returns the number of collections touched.
+    /// </summary>
+    Task<int> DeleteDocumentEverywhereAsync(string embeddingCollectionBase, long documentId, CancellationToken ct = default);
 }

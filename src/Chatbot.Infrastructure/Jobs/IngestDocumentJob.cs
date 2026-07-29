@@ -104,7 +104,9 @@ public sealed class IngestDocumentJob(
             await AdvanceStageAsync(job, ProcessingStage.Embed, ct);
             var collection = VectorCollectionNaming.For(embeddingModel.QdrantCollectionName, strategy.Id);
             await vectors.EnsureCollectionAsync(collection, embeddingModel.Dimension, ct);
-            await vectors.DeleteByDocumentAsync(collection, documentId, ct);
+            // Clear this document from every strategy's collection, not just the current one, so a
+            // reindex under a changed chunking strategy leaves no orphaned points behind.
+            await vectors.DeleteDocumentEverywhereAsync(embeddingModel.QdrantCollectionName, documentId, ct);
 
             var chunkVectors = new List<ChunkVector>(chunkEntities.Count);
             foreach (var batch in chunkEntities.Chunk(EmbedBatchSize))

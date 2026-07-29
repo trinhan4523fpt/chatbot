@@ -273,11 +273,11 @@ public sealed class DeleteDocumentCommandHandler(
 
         await SubjectAccess.EnsureCanManageAsync(db, currentUser, document.SubjectId, ct);
 
-        // Capture Qdrant collections holding this document's vectors before removing the linkage.
-        var collections = await db.ChunkEmbeddings
-            .Where(e => e.Chunk.DocumentId == document.Id)
-            .Select(e => e.VectorCollection)
-            .Distinct()
+        // Embedding-model collection bases for this document's vectors. Derived from every registered
+        // model (not just the ones with surviving embedding rows) so orphans from a past strategy are
+        // cleared too. The delete then sweeps all of each base's strategy collections.
+        var embeddingBases = await db.EmbeddingModels
+            .Select(m => m.QdrantCollectionName)
             .ToListAsync(ct);
 
         // Soft-delete the document (keeps transcripts/citations via DocumentTitle snapshot),
@@ -292,9 +292,9 @@ public sealed class DeleteDocumentCommandHandler(
         });
         await db.SaveChangesAsync(ct);
 
-        foreach (var collection in collections)
+        foreach (var embeddingBase in embeddingBases)
         {
-            await vectors.DeleteByDocumentAsync(collection, document.Id, ct);
+            await vectors.DeleteDocumentEverywhereAsync(embeddingBase, document.Id, ct);
         }
 
         await storage.DeleteDocumentDirectoryAsync(document.SubjectId, document.Id, ct);
