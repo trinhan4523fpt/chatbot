@@ -142,16 +142,8 @@ public static class CreateTokenOrder
             .FirstOrDefaultAsync(p => p.Id == cmd.PackageId && p.IsActive, ct)
             ?? throw new KeyNotFoundException($"Gói token #{cmd.PackageId} không tồn tại hoặc đã ngưng bán.");
 
-        // Hủy các đơn chờ cũ của học sinh cho cùng gói (tránh duplicate)
-        var oldPending = await db.StudentTokenOrders
-            .Where(o => o.UserId == currentUser.UserId
-                     && o.PackageId == cmd.PackageId
-                     && o.Status == OrderStatus.Pending
-                     && o.ExpiredAtUtc > DateTime.UtcNow)
-            .ToListAsync(ct);
-        foreach (var old in oldPending)
-            old.Status = OrderStatus.Expired;
-
+        // Cho phép nhiều đơn chờ (Pending) cùng gói cùng lúc;
+        // mỗi lần tạo đơn là một session thanh toán VnPay độc lập.
         var orderRef = $"ORD-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid().ToString("N")[..8].ToUpper()}";
 
         var order = new StudentTokenOrder
@@ -302,14 +294,11 @@ public static class ProcessVnPayCallback
 
         wallet.AvailableTokens += order.TokenAmount;
 
-        // Cập nhật ngày hết hạn (lấy ngày xa nhất)
+        // Token cộng dồn vĩnh viễn — không đặt ngày hết hạn ví.
+        // Mỗi lần mua thêm gói, số token được cộng thẳng vào AvailableTokens
+        // mà không bị giới hạn bởi ValidityDays của gói.
         var package = await db.TokenPackages.FindAsync([order.PackageId], ct);
-        if (package?.ValidityDays.HasValue == true)
-        {
-            var newExpiry = DateTime.UtcNow.AddDays(package.ValidityDays.Value);
-            wallet.ExpiresAtUtc = wallet.ExpiresAtUtc is null || wallet.ExpiresAtUtc < newExpiry
-                ? newExpiry : wallet.ExpiresAtUtc;
-        }
+        wallet.ExpiresAtUtc = null;
 
         // Ghi lịch sử giao dịch
         var tx = new TokenTransaction
@@ -512,8 +501,7 @@ public static class ConsumeToken
         if (wallet is null)
             return new Result(false, 0, "Chưa có ví token. Vui lòng mua gói để sử dụng chatbot.");
 
-        if (wallet.ExpiresAtUtc.HasValue && wallet.ExpiresAtUtc < DateTime.UtcNow)
-            return new Result(false, 0, "Ví token đã hết hạn. Vui lòng mua gói mới.");
+        // ExpiresAtUtc luôn null (token cộng dồn vĩnh viễn), không cần kiểm tra hết hạn.
 
         if (wallet.AvailableTokens < cmd.Amount)
             return new Result(false, wallet.AvailableTokens, "Không đủ token. Vui lòng mua thêm gói.");

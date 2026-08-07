@@ -502,3 +502,195 @@ Cấu hình GPU → [docker-compose.yml](docker-compose.yml) mục `ollama.deplo
 Máy không có GPU NVIDIA → comment khối đó lại.
 
 **Hangfire dashboard:** `/hangfire` — xem job đang chạy/lỗi → [Program.cs:140](src/Chatbot.Api/Program.cs#L140)
+
+---
+
+# 4. QUY TRÌNH THANH TOÁN VNPAY
+
+**Tóm tắt:** Học sinh chọn gói → tạo đơn PENDING → redirect VNPay → IPN cập nhật DB → cộng token
+
+### Entity & Config
+
+| File | Nội dung |
+|---|---|
+| [PaymentConfigurations.cs](src/Chatbot.Infrastructure/Persistence/Configurations/PaymentConfigurations.cs) | EF Core config: `TokenPackage`, `StudentTokenOrder`, `StudentTokenWallet`, `TokenTransaction` |
+| [Payment.cs](src/Chatbot.Domain/Entities/Payment.cs) | Domain entities |
+| [VnPayOptions](src/Chatbot.Infrastructure/Payment/VnPayService.cs#L14) | `TmnCode`, `HashSecret`, `BaseUrl`, `Version`, `TimeZoneId` — đọc từ `appsettings.json["VnPay"]` |
+
+### Bước 1 — Tạo đơn & Payment URL
+
+**Handler:** [CreateTokenOrder](src/Chatbot.Application/Features/Payment/PaymentFeatures.cs#L129)
+
+| # | Bước | Dòng |
+|---|---|---|
+| 1 | Kiểm tra gói `IsActive` | [:141](src/Chatbot.Application/Features/Payment/PaymentFeatures.cs#L141) |
+| 2 | Hủy các đơn `Pending` cũ cùng gói (tránh duplicate) | [:146](src/Chatbot.Application/Features/Payment/PaymentFeatures.cs#L146) |
+| 3 | Tạo `orderRef = "ORD-{yyyyMMddHHmmss}-{8 ký tự random}"` | [:155](src/Chatbot.Application/Features/Payment/PaymentFeatures.cs#L155) |
+| 4 | INSERT `StudentTokenOrder` status=`Pending`, hết hạn sau 15 phút | [:157](src/Chatbot.Application/Features/Payment/PaymentFeatures.cs#L157) |
+| 5 | Gọi `IVnPayService.CreatePaymentUrl(...)` | [:170](src/Chatbot.Application/Features/Payment/PaymentFeatures.cs#L170) |
+| 6 | Trả về `{ OrderId, OrderRef, PaymentUrl }` | [:178](src/Chatbot.Application/Features/Payment/PaymentFeatures.cs#L178) |
+
+**VnPayService.CreatePaymentUrl** — [VnPayService.cs:55](src/Chatbot.Infrastructure/Payment/VnPayService.cs#L55):
+
+```csharp
+// Params quan trọng
+vnpParams["vnp_Amount"]     = ((long)(amount * 100)).ToString(); // nhân 100
+vnpParams["vnp_TxnRef"]     = orderRef;
+vnpParams["vnp_ExpireDate"] = vnNow.AddMinutes(15).ToString("yyyyMMddHHmmss");
+// Build sorted query string → ký HMAC-SHA512 → ghép URL
+var secureHash = HmacSha512(_opts.HashSecret, queryString); // [:89]
+```
+
+> ⚠️ **Params phải sort theo alphabet** trước khi ký — nếu không VNPay từ chối chữ ký.
+> `SortedDictionary<string, string>(StringComparer.Ordinal)` làm điều này tự động → [:68]
+
+### Bước 2 — VNPay Callback (IPN / Return URL)
+
+**Handler:** [ProcessVnPayCallback](src/Chatbot.Application/Features/Payment/PaymentFeatures.cs#L240)
+
+| # | Bước | Dòng |
+|---|---|---|
+| 1 | `ValidateCallback` — verify HMAC-SHA512, parse tất cả field VnPay | [:253](src/Chatbot.Application/Features/Payment/PaymentFeatures.cs#L253) |
+| 2 | Nếu chữ ký sai → return false ngay | [:255](src/Chatbot.Application/Features/Payment/PaymentFeatures.cs#L255) |
+| 3 | Tìm order theo `OrderRef` | [:258](src/Chatbot.Application/Features/Payment/PaymentFeatures.cs#L258) |
+| 4 | Ghi raw VNPay response vào order (để debug) | [:265](src/Chatbot.Application/Features/Payment/PaymentFeatures.cs#L265) |
+| 5 | **Idempotent check**: order đã `Paid` → skip | [:272](src/Chatbot.Application/Features/Payment/PaymentFeatures.cs#L272) |
+| 6 | `ResponseCode != "00"` → `Failed` | [:275](src/Chatbot.Application/Features/Payment/PaymentFeatures.cs#L275) |
+| 7 | Order đã `Expired` → `Failed` | [:282](src/Chatbot.Application/Features/Payment/PaymentFeatures.cs#L282) |
+| 8 | Thanh toán OK → `Paid`, cộng token vào ví | [:290](src/Chatbot.Application/Features/Payment/PaymentFeatures.cs#L290) |
+| 9 | Upsert `StudentTokenWallet` nếu chưa có | [:294](src/Chatbot.Application/Features/Payment/PaymentFeatures.cs#L294) |
+| 10 | Cập nhật `ExpiresAtUtc` (lấy ngày xa nhất) | [:309](src/Chatbot.Application/Features/Payment/PaymentFeatures.cs#L309) |
+| 11 | Ghi `TokenTransaction` type=`Purchase` | [:315](src/Chatbot.Application/Features/Payment/PaymentFeatures.cs#L315) |
+| 12 | **Fire-and-forget** gửi email xác nhận (lỗi email không fail flow) | [:329](src/Chatbot.Application/Features/Payment/PaymentFeatures.cs#L329) |
+
+**VnPayService.ValidateCallback** — [VnPayService.cs:101](src/Chatbot.Infrastructure/Payment/VnPayService.cs#L101):
+
+```csharp
+// Loại bỏ vnp_SecureHash + vnp_SecureHashType → sort → ký lại → so sánh
+var computedHash = HmacSha512(_opts.HashSecret, queryString);
+var isValid = string.Equals(computedHash, receivedHash, OrdinalIgnoreCase); // [:122]
+// Parse thêm: Amount /100, PayDate "yyyyMMddHHmmss", RawResponse (JSON log)
+```
+
+> ⚠️ **IPN là cơ chế chính** — VNPay gọi server-to-server, không qua browser.
+> Return URL chỉ để FE hiển thị kết quả — **không cập nhật DB tại Return URL**.
+
+### Trạng thái đơn hàng
+
+`OrderStatus` — `Pending → Paid | Failed | Expired | Refunded`
+
+---
+
+# 5. QUY TRÌNH MUA GÓI TOKEN
+
+**Tóm tắt:** Xem gói → tạo đơn → VNPay → cộng token vào ví → tiêu thụ khi chat
+
+### Wallet & Token lifecycle
+
+| Thao tác | Handler | Dòng |
+|---|---|---|
+| Xem ví | [GetMyWallet](src/Chatbot.Application/Features/Payment/PaymentFeatures.cs#L471) | [:480] |
+| Mua gói (tạo đơn) | [CreateTokenOrder](src/Chatbot.Application/Features/Payment/PaymentFeatures.cs#L129) | Xem Flow 4 |
+| **Tiêu thụ token khi chat** | [ConsumeToken](src/Chatbot.Application/Features/Payment/PaymentFeatures.cs#L501) | [:506] |
+| Lịch sử giao dịch | [GetTokenHistory](src/Chatbot.Application/Features/Payment/PaymentFeatures.cs#L541) | [:553] |
+| Admin cộng/trừ thủ công | [AdminAdjustTokens](src/Chatbot.Application/Features/Payment/PaymentFeatures.cs#L582) | [:586] |
+| Admin thu hồi đơn | [AdminRevokeOrder](src/Chatbot.Application/Features/Payment/PaymentFeatures.cs#L623) | [:628] |
+| Admin hoàn tiền | [RefundOrder](src/Chatbot.Application/Features/Payment/PaymentFeatures.cs#L497) | [:502] |
+
+**ConsumeToken** — logic kiểm tra trước khi trừ:
+
+```csharp
+// [PaymentFeatures.cs:512-519]
+if (wallet is null)        → "Chưa có ví token"
+if (wallet.ExpiresAtUtc < now) → "Ví token đã hết hạn"
+if (wallet.AvailableTokens < cmd.Amount) → "Không đủ token"
+// OK → wallet.AvailableTokens -= amount; wallet.UsedTokens += amount;
+// Ghi TokenTransaction type=ChatUsage
+```
+
+> Gọi `ConsumeToken` từ `ChatController` / `ChatHub` **sau mỗi tin nhắn thành công**.
+> Nếu trả lời thất bại → không trừ token.
+
+### TokenTransaction types
+
+| Type | Khi nào |
+|---|---|
+| `Purchase` | Mua gói thành công (IPN ResponseCode=00) |
+| `ChatUsage` | Dùng chatbot (delta âm) |
+| `AdminAdjustment` | Admin cộng/trừ thủ công hoặc thu hồi đơn |
+| `Refund` | Admin hoàn tiền (trả lại token, delta âm) |
+
+---
+
+# 6. BÁO CÁO & THỐNG KÊ DOANH THU
+
+**File chính:** [RevenueReportFeatures.cs](src/Chatbot.Application/Features/Payment/RevenueReportFeatures.cs)
+
+### Các endpoint báo cáo
+
+| Use Case | Class | Dòng | Mô tả |
+|---|---|---|---|
+| KPI tổng quan | `GetRevenueSummary` | [:21](src/Chatbot.Application/Features/Payment/RevenueReportFeatures.cs#L21) | Tổng/tháng này/tháng trước, tăng trưởng %, top 5 gói |
+| Doanh thu theo tháng | `GetMonthlyRevenue` | [:146](src/Chatbot.Application/Features/Payment/RevenueReportFeatures.cs#L146) | 12 điểm dữ liệu cho biểu đồ |
+| Doanh thu theo ngày | `GetDailyRevenue` | [:196](src/Chatbot.Application/Features/Payment/RevenueReportFeatures.cs#L196) | Tối đa 90 ngày, fill 0 ngày không có đơn |
+| Thống kê từng gói | `GetPackageStats` | [:233](src/Chatbot.Application/Features/Payment/RevenueReportFeatures.cs#L233) | paid/pending/failed, avg doanh thu/ngày |
+| Danh sách đơn hàng | `ListOrders` | [:285](src/Chatbot.Application/Features/Payment/RevenueReportFeatures.cs#L285) | Filter status/user/package/date/search + phân trang |
+| Lịch sử 1 học sinh | `GetStudentPurchaseHistory` | [:366](src/Chatbot.Application/Features/Payment/RevenueReportFeatures.cs#L366) | Ví + đơn hàng + 50 giao dịch gần nhất |
+| Top user token | `GetTokenUsageStats` | [:436](src/Chatbot.Application/Features/Payment/RevenueReportFeatures.cs#L436) | Top 10 dùng nhiều / chi nhiều |
+| Xuất CSV | `ExportOrdersCsv` | [:545](src/Chatbot.Application/Features/Payment/RevenueReportFeatures.cs#L545) | UTF-8 BOM — Excel đọc đúng tiếng Việt |
+
+### GetRevenueSummary — các trường quan trọng
+
+```csharp
+// [RevenueReportFeatures.cs:60-139]
+var thisMonthStart = new DateTime(now.Year, now.Month, 1, ..., DateTimeKind.Utc); // [:61]
+
+// Tăng trưởng MoM
+var growthPct = revenueLastMonth == 0
+    ? (revenueThisMonth > 0 ? 100.0 : 0.0)
+    : (double)((revenueThisMonth - revenueLastMonth) / revenueLastMonth * 100); // [:83]
+
+// Tỉ lệ chuyển đổi: học sinh có ví / tổng học sinh
+var conversionPct = totalStudents == 0 ? 0.0
+    : Math.Round((double)totalStudentsWithWallet / totalStudents * 100, 2); // [:100]
+
+// Token (tính từ wallet để consistent — không phải từ orders)
+var totalIssued   = wallets.Sum(w => (long)(w.AvailableTokens + w.UsedTokens)); // [:104]
+var consumptionPct = totalIssued == 0 ? 0.0
+    : Math.Round((double)totalConsumed / totalIssued * 100, 2); // [:107]
+
+// Top 5 gói — GroupBy PackageId, ORDER BY Revenue DESC, TAKE 5
+// RevenueSharePct = gói.Revenue / totalRevenue * 100 // [:131]
+```
+
+### GetDailyRevenue — điểm cần chú ý
+
+```csharp
+// Giới hạn 90 ngày để tránh query quá lớn [RevenueReportFeatures.cs:205]
+var toDate = q.To.Date > from.AddDays(90) ? from.AddDays(90) : q.To.Date;
+
+// Fill ngày không có đơn bằng 0 (không dùng GROUP BY thuần)
+for (var d = from; d <= toDate; d = d.AddDays(1))
+{
+    grouped.TryGetValue(d, out var val);
+    result.Add(new DailyData(d.ToString("yyyy-MM-dd"), val?.Revenue ?? 0, val?.Count ?? 0));
+} // [:221]
+```
+
+### ExportOrdersCsv — UTF-8 BOM
+
+```csharp
+// [RevenueReportFeatures.cs:605]
+return [.. Encoding.UTF8.GetPreamble(), .. Encoding.UTF8.GetBytes(sb.ToString())];
+// BOM (EF BB BF) đặt đầu file → Excel tự detect encoding tiếng Việt
+```
+
+### Điểm lưu ý
+
+| Vấn đề | Giải thích |
+|---|---|
+| Token aggregate lấy từ **Wallet**, không từ Orders | Consistent hơn — orders có thể bị refund/revoke nhưng wallet đã được cập nhật |
+| `GetMonthlyRevenue` đếm "học sinh mới" theo `Wallet.CreatedAtUtc` | Tức là học sinh mua lần đầu trong tháng (tạo ví mới) |
+| `ListOrders` search full-text | `OrderRef`, `User.Email`, `User.FullName` — dùng `Contains` → **không dùng index**, chậm nếu data lớn |
+| `GetStudentPurchaseHistory` lấy tối đa **50 giao dịch** gần nhất | Tránh query quá nhiều — xem [:421] |
+
